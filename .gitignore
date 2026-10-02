@@ -12,9 +12,9 @@ xcuserdata/
 
 # Personal data. D-Shift stores memory and chat history outside the repo by default
 # (~/Library/Application Support/DShift). These cover DSHIFT_DATA_DIR pointed inside the repo.
-data/
-memory/
-history/
+/data/
+/memory/
+/history/
 *.jsonl
 
 # macOS
