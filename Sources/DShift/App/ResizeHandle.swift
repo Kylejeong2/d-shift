@@ -25,6 +25,13 @@ final class ResizeHandle: NSView {
 
     override var mouseDownCanMoveWindow: Bool { false }
 
+    // macOS passes clicks on fully transparent pixels to the window behind. A fill too faint to see keeps the
+    // corner handles clickable where they extend past the panel's rounded corners.
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor(white: 0, alpha: 0.01).setFill()
+        dirtyRect.fill()
+    }
+
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     // Cursor rects only apply in the active app, and the panel never activates D-Shift, so track hover directly.
