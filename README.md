@@ -47,6 +47,7 @@ When you launch with `swift run`, macOS attributes these permissions to your **t
 | Resize | Drag the left edge for width, the top or bottom edge for height, or a left corner for both. Size and vertical position are remembered. |
 | Send while Claude is replying | Return queues the message; it runs when the current reply finishes |
 | Interrupt and send now | Cmd+Return, or the arrow on a queued message |
+| Text size | Cmd+= / Cmd+- to zoom, Cmd+0 to reset (remembered) |
 | Reset a chat | Type `/clear` |
 | Open memory folder | Menu bar icon > Open Memory Folder |
 

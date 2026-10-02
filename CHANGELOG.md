@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Browser-style text zoom: Cmd+= and Cmd+- step the text size from 80% to 200%, Cmd+0 resets. The level is remembered.
 - Message queue: send while Claude is replying and messages run in order. Queued messages can be sent immediately or removed; Stop pauses the queue.
 - Cmd+Return sends immediately, interrupting the current reply. Interrupted replies stay in the conversation as context.
 - Closing the last chat tab hides the sidebar; it reopens with a fresh chat.

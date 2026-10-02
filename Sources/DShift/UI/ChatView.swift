@@ -20,6 +20,7 @@ struct SidebarView: View {
             ChatView(model: store.selected)
                 .id(store.selectedID)
         }
+        .background { TextZoomShortcuts() }
         // Clicking anywhere that isn't a control puts the cursor in the input. Child buttons and tabs win over this.
         .contentShape(Rectangle())
         .onTapGesture { store.selected.focusRequest += 1 }
@@ -61,10 +62,7 @@ private struct TabStrip: View {
             }
             IconButton(systemName: "plus", help: "New chat", action: store.newChat)
                 .keyboardShortcut("t", modifiers: .command)
-            Button("") { store.close(store.selectedID) }
-                .keyboardShortcut("w", modifiers: .command)
-                .hidden()
-                .frame(width: 0)
+            ShortcutKey("w", action: { store.close(store.selectedID) })
             IconButton(systemName: "xmark", help: "Hide sidebar", action: onClose)
         }
         .padding(.horizontal, 10)
@@ -85,13 +83,13 @@ private struct TabButton: View {
                 ProgressView().controlSize(.mini)
             }
             Text(chat.title)
-                .font(.system(size: 11, weight: isSelected ? .semibold : .regular))
+                .scaledFont(11, weight: isSelected ? .semibold : .regular)
                 .lineLimit(1)
                 .frame(maxWidth: 120, alignment: .leading)
             if isHovering || isSelected {
                 Button(action: onClose) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
+                        .scaledFont(8, weight: .bold)
                 }
                 .buttonStyle(.plain)
                 .help("Close chat")
@@ -118,7 +116,7 @@ private struct IconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 11, weight: .semibold))
+                .scaledFont(11, weight: .semibold)
                 .frame(width: 22, height: 22)
                 .contentShape(Rectangle())
         }
@@ -139,13 +137,13 @@ private struct AppContextHeader: View {
                     .frame(width: 18, height: 18)
             }
             Image(systemName: "eye")
-                .font(.system(size: 10))
+                .scaledFont(10)
                 .foregroundStyle(.secondary)
             Text(tracker.app?.localizedName ?? "No app")
-                .font(.system(size: 12, weight: .semibold))
+                .scaledFont(12, weight: .semibold)
             if !tracker.windowTitle.isEmpty {
                 Text(tracker.windowTitle)
-                    .font(.system(size: 11))
+                    .scaledFont(11)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
@@ -242,7 +240,8 @@ private struct UsageBar: View {
             Text(usage.estimatedCost, format: .currency(code: "USD").precision(.fractionLength(usage.estimatedCost < 1 ? 3 : 2)))
                 .help("Estimated at Opus 5.5 list prices over \(usage.requests) requests")
         }
-        .font(.system(size: 10).monospacedDigit())
+        .scaledFont(10)
+        .monospacedDigit()
         .foregroundStyle(.secondary)
         .lineLimit(1)
         .padding(.horizontal, 18)
@@ -277,10 +276,10 @@ private struct EmptyState: View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Ask about what's on your screen.")
             Text("It remembers what you tell it about yourself. /clear resets the chat.")
-                .font(.system(size: 11))
+                .scaledFont(11)
                 .foregroundStyle(.secondary)
         }
-        .font(.system(size: 13))
+        .scaledFont(13)
         .padding(.top, 4)
     }
 }
@@ -290,7 +289,7 @@ private struct ThinkingRow: View {
         HStack(spacing: 6) {
             ProgressView().controlSize(.mini)
             Text("Thinking")
-                .font(.system(size: 12))
+                .scaledFont(12)
                 .foregroundStyle(.secondary)
         }
         .transition(.opacity)
@@ -306,7 +305,7 @@ private struct TextRow: View {
             HStack {
                 Spacer(minLength: 40)
                 Text(entry.text)
-                    .font(.system(size: 13))
+                    .scaledFont(13)
                     .foregroundStyle(.white)
                     .textSelection(.enabled)
                     .padding(.horizontal, 11)
@@ -315,7 +314,7 @@ private struct TextRow: View {
             }
         case .assistant:
             Text(rendered)
-                .font(.system(size: 13))
+                .scaledFont(13)
                 .lineSpacing(2)
                 .textSelection(.enabled)
                 .padding(.horizontal, 11)
@@ -344,16 +343,16 @@ private struct ToolCallRow: View {
                 HStack(spacing: 6) {
                     ToolStatusIcon(status: entry.status)
                     Text(entry.name)
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .scaledFont(12, weight: .medium, design: .monospaced)
                     if !isExpanded, !entry.inputSummary.isEmpty {
                         Text(entry.inputSummary)
-                            .font(.system(size: 11, design: .monospaced))
+                            .scaledFont(11, design: .monospaced)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .scaledFont(9, weight: .semibold)
                         .foregroundStyle(.tertiary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
@@ -401,7 +400,7 @@ private struct ToolStatusIcon: View {
                 Image(systemName: "nosign").foregroundStyle(.secondary)
             }
         }
-        .font(.system(size: 10, weight: .bold))
+        .scaledFont(10, weight: .bold)
         .frame(width: 14, height: 14)
     }
 }
@@ -414,10 +413,10 @@ private struct ToolDetail: View {
         if !text.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
+                    .scaledFont(10, weight: .semibold)
                     .foregroundStyle(.secondary)
                 Text(text.prefix(2000))
-                    .font(.system(size: 11, design: .monospaced))
+                    .scaledFont(11, design: .monospaced)
                     .lineLimit(14)
                     .textSelection(.enabled)
             }
@@ -446,13 +445,13 @@ private struct QueueView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text(model.isQueuePaused ? "Queued, paused" : "Queued")
-                    .font(.system(size: 11, weight: .semibold))
+                    .scaledFont(11, weight: .semibold)
                     .foregroundStyle(.secondary)
                 Spacer()
                 if model.isQueuePaused {
                     Button("Resume", action: model.resumeQueue)
                         .buttonStyle(.plain)
-                        .font(.system(size: 11, weight: .medium))
+                        .scaledFont(11, weight: .medium)
                         .foregroundStyle(Color.accentColor)
                 }
             }
@@ -480,7 +479,7 @@ private struct QueuedRow: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(text)
-                .font(.system(size: 12))
+                .scaledFont(12)
                 .lineLimit(1)
                 .truncationMode(.tail)
             Spacer(minLength: 4)
@@ -498,7 +497,7 @@ private struct InputBar: View {
         HStack(spacing: 8) {
             TextField(model.isRunning ? "Queue a message, or Cmd+Return to send now" : "Ask about your screen...", text: $model.input, axis: .vertical)
                 .textFieldStyle(.plain)
-                .font(.system(size: 13))
+                .scaledFont(13)
                 .lineLimit(1...6)
                 .focused($isFocused)
                 .onKeyPress(.return, phases: .down) { press in
@@ -508,10 +507,7 @@ private struct InputBar: View {
                 }
                 .onSubmit(model.send)
             // Backup for Cmd+Return in case the field consumes the key press first; a second call finds empty input.
-            Button("", action: model.sendNow)
-                .keyboardShortcut(.return, modifiers: .command)
-                .hidden()
-                .frame(width: 0)
+            ShortcutKey(.return, action: model.sendNow)
             if model.isRunning {
                 Button(action: model.stop) {
                     Image(systemName: "stop.circle.fill")
