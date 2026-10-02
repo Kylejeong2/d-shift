@@ -19,11 +19,11 @@ final class SidebarController {
     // Continuous-curve radius in line with macOS floating panels and Control Center.
     private static let cornerRadius: CGFloat = 20
     // Lower is more see-through. Only the backdrop fades; text and controls stay fully opaque.
-    private static let backdropOpacity: CGFloat = 0.78
+    private static let backdropOpacity: CGFloat = 0.58
     private static let widthKey = "sidebar.width"
     private static let heightKey = "sidebar.height"
     private static let topInsetKey = "sidebar.topInset"
-    private static let cornerHandleSize: CGFloat = 14
+    private static let cornerHandleSize: CGFloat = 24
 
     private let store = ChatStore()
     private let panel: SidebarPanel
@@ -61,45 +61,50 @@ final class SidebarController {
         Self.roundCorners(of: backdrop)
 
         let hosting = NSHostingView(rootView: SidebarView(store: store, onClose: { [weak panel] in panel?.orderOut(nil) }))
+        store.onLastChatClosed = { [weak panel] in panel?.orderOut(nil) }
         for view in [backdrop, hosting] as [NSView] {
             Self.pin(view, in: container)
         }
-        panel.contentView = container
+        // Handles sit on a root view above the rounded, clipped container so the corner handles reach into the
+        // transparent rounded-off corners instead of being clipped away.
+        let root = NSView()
+        Self.pin(container, in: root)
+        panel.contentView = root
 
         let handleEdges: [ResizeHandle.Edges] = [.left, .top, .bottom, [.top, .left], [.bottom, .left]]
         for edges in handleEdges {
             let handle = ResizeHandle(edges: edges) { [weak self] frame in self?.saveFrame(frame) }
             handle.translatesAutoresizingMaskIntoConstraints = false
-            container.addSubview(handle)
+            root.addSubview(handle)
             let thickness = Self.handleThickness
             let corner = Self.cornerHandleSize
             var constraints: [NSLayoutConstraint] = []
             if edges.contains(.left) {
-                constraints.append(handle.leadingAnchor.constraint(equalTo: container.leadingAnchor))
+                constraints.append(handle.leadingAnchor.constraint(equalTo: root.leadingAnchor))
             }
             switch edges {
             case .left:
                 constraints += [
                     handle.widthAnchor.constraint(equalToConstant: thickness),
-                    handle.topAnchor.constraint(equalTo: container.topAnchor, constant: corner),
-                    handle.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -corner),
+                    handle.topAnchor.constraint(equalTo: root.topAnchor, constant: corner),
+                    handle.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -corner),
                 ]
             case .top, .bottom:
                 constraints += [
-                    handle.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: corner),
-                    handle.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                    handle.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: corner),
+                    handle.trailingAnchor.constraint(equalTo: root.trailingAnchor),
                     handle.heightAnchor.constraint(equalToConstant: thickness),
                     edges == .top
-                        ? handle.topAnchor.constraint(equalTo: container.topAnchor)
-                        : handle.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                        ? handle.topAnchor.constraint(equalTo: root.topAnchor)
+                        : handle.bottomAnchor.constraint(equalTo: root.bottomAnchor),
                 ]
             default:
                 constraints += [
                     handle.widthAnchor.constraint(equalToConstant: corner),
                     handle.heightAnchor.constraint(equalToConstant: corner),
                     edges.contains(.top)
-                        ? handle.topAnchor.constraint(equalTo: container.topAnchor)
-                        : handle.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                        ? handle.topAnchor.constraint(equalTo: root.topAnchor)
+                        : handle.bottomAnchor.constraint(equalTo: root.bottomAnchor),
                 ]
             }
             NSLayoutConstraint.activate(constraints)

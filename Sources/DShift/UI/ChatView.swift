@@ -4,7 +4,7 @@ import SwiftUI
 private enum Theme {
     static let surfaceShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
     static let innerShape = RoundedRectangle(cornerRadius: 8, style: .continuous)
-    static let surfaceFill = Color.black.opacity(0.42)
+    static let surfaceFill = Color.black.opacity(0.32)
     static let stroke = Color.white.opacity(0.1)
 }
 
@@ -98,7 +98,7 @@ private struct TabButton: View {
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
         .background(
-            .white.opacity(isSelected ? 0.14 : (isHovering ? 0.07 : 0)),
+            .white.opacity(isSelected ? 0.1 : (isHovering ? 0.05 : 0)),
             in: Theme.innerShape
         )
         .contentShape(Rectangle())
@@ -323,7 +323,7 @@ private struct TextRow: View {
         }
     }
 
-    private static let userBubble = Color(red: 0.0, green: 0.36, blue: 0.82)
+    private static let userBubble = Color(red: 0.0, green: 0.36, blue: 0.82).opacity(0.75)
 
     private var rendered: AttributedString {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)

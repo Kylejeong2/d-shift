@@ -43,7 +43,7 @@ When you launch with `swift run`, macOS attributes these permissions to your **t
 |---|---|
 | Open / close | Double-tap Shift, or Esc to close |
 | New chat tab | Cmd+T or the + button |
-| Close chat tab | Cmd+W or the x on the tab |
+| Close chat tab | Cmd+W or the x on the tab. Closing the last tab hides the sidebar. |
 | Resize | Drag the left edge for width, the top or bottom edge for height, or a left corner for both. Size and vertical position are remembered. |
 | Reset a chat | Type `/clear` |
 | Open memory folder | Menu bar icon > Open Memory Folder |

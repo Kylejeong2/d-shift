@@ -6,6 +6,7 @@ final class ChatStore: ObservableObject {
     let tracker = AppTracker()
     @Published private(set) var chats: [ChatModel]
     @Published private(set) var selectedID: UUID
+    var onLastChatClosed: (() -> Void)?
 
     init() {
         let first = ChatModel(tracker: tracker)
@@ -32,7 +33,11 @@ final class ChatStore: ObservableObject {
         guard let index = chats.firstIndex(where: { $0.id == id }) else { return }
         chats[index].stop()
         chats.remove(at: index)
-        if chats.isEmpty { return newChat() }
+        if chats.isEmpty {
+            newChat()
+            onLastChatClosed?()
+            return
+        }
         if id == selectedID { selectedID = chats[min(index, chats.count - 1)].id }
     }
 }
