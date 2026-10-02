@@ -19,7 +19,7 @@ final class SidebarController {
     // Continuous-curve radius in line with macOS floating panels and Control Center.
     private static let cornerRadius: CGFloat = 20
     // Lower is more see-through. Only the backdrop fades; text and controls stay fully opaque.
-    private static let backdropOpacity: CGFloat = 0.58
+    private static let backdropOpacity: CGFloat = 0.85
     private static let widthKey = "sidebar.width"
     private static let heightKey = "sidebar.height"
     private static let topInsetKey = "sidebar.topInset"
