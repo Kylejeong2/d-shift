@@ -4,6 +4,7 @@ import ScreenCaptureKit
 struct ReadScreenTool: Tool {
     let tracker: AppTracker
 
+    let isHidden = true
     let name = "read_screen"
     let description = "Re-read the accessibility tree of the app window the user is currently looking at. Use when the user says the screen changed or the snapshot in the conversation looks stale."
     let inputSchema: JSON = ["type": "object", "properties": [String: Any](), "additionalProperties": false]
@@ -21,8 +22,9 @@ struct ScreenshotTool: Tool {
 
     let tracker: AppTracker
 
+    let maxCallsPerTurn: Int? = 1
     let name = "take_screenshot"
-    let description = "Capture a screenshot of the window the user is looking at, or of their whole screen. Use when the accessibility snapshot lacks visual information: images, charts, canvas or design apps, or questions about layout and appearance."
+    let description = "Capture a screenshot of the window the user is looking at, or of their whole screen. Last resort: only when the accessibility snapshot lacks the visual information needed to answer (images, charts, canvas or design apps, layout or styling). Limited to one per question."
     let inputSchema: JSON = [
         "type": "object",
         "properties": [

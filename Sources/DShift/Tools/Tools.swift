@@ -14,17 +14,28 @@ protocol Tool {
     var description: String { get }
     var inputSchema: JSON { get }
     func requiresApproval(for input: JSON) -> Bool
+    /// Hidden tools run without a transcript row, for background work the user doesn't need to see.
+    var isHidden: Bool { get }
+    /// Caps how often the model may call this tool while answering one question.
+    var maxCallsPerTurn: Int? { get }
     func run(_ input: JSON) async throws -> ToolOutput
+}
+
+extension Tool {
+    var isHidden: Bool { false }
+    var maxCallsPerTurn: Int? { nil }
 }
 
 enum ToolError: LocalizedError {
     case unknownTool(String)
     case invalidInput(String)
+    case limitReached(String, Int)
 
     var errorDescription: String? {
         switch self {
         case .unknownTool(let name): "Unknown tool: \(name)"
         case .invalidInput(let reason): "Invalid input: \(reason)"
+        case .limitReached(let name, let limit): "\(name) can only be called \(limit) time(s) per question. Answer with what you have."
         }
     }
 }

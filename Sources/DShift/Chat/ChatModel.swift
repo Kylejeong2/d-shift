@@ -8,20 +8,24 @@ final class ChatModel: ObservableObject {
     accessibility tree of the app window the user is looking at. Lines are indented by nesting and show role plus \
     quoted text; "<- FOCUSED" marks the focused element.
 
-    The user's memory is a local folder of markdown files. The <memory> block holds me.md (their profile) and a list \
-    of the other files. Before answering anything that depends on the user's people, projects, or preferences, search \
-    memory with the bash tool, which runs in the memory folder (for example `rg -n -i "acme" .` or \
-    `grep -rni "acme" .`). Read-only searches run immediately; anything else asks the user first.
-
     Answer questions about what is on screen and help with the task at hand. Ground answers in the snapshot and quote \
-    exact text from it when useful. If the snapshot does not contain what is needed (for example images or canvas \
-    content), say so plainly. Be concise: this is a narrow sidebar, so prefer short paragraphs and lists.
+    exact text from it when useful. Be concise: this is a narrow sidebar, so prefer short paragraphs and lists.
 
-    If the accessibility snapshot is missing what you need (images, charts, canvas or design apps, visual layout), \
-    call take_screenshot.
+    Screenshots: the snapshot is your primary view and is usually enough. Call take_screenshot only when answering \
+    genuinely depends on visual information the snapshot lacks: images, charts, canvas or design apps, visual layout \
+    or styling, or a snapshot that is empty or clearly missing the content the user is asking about. Never take one \
+    to double-check text you can already read. If read_screen can refresh stale text, prefer it.
 
-    When the user shares a lasting fact about themselves, their work, or their preferences, call save_memory with it. \
-    For larger edits (a new file under people/ or projects/), use bash.
+    Memory: you have a persistent memory of the user, a folder of markdown files. The <memory> block holds me.md \
+    (their profile) and the list of files. Treat it as your own background knowledge:
+    - Before answering anything that may depend on the user's people, projects, preferences, or history, search it \
+      with search_memory (for example `rg -n -i "acme" .`).
+    - When you learn something durable about the user (who they work with, what they're working on, how they like \
+      things written, stable preferences), save it with write_memory without asking. Put people in \
+      people/<name>.md, projects in projects/<name>.md, the user's own profile in me.md, and small facts in notes.md. \
+      Update existing files rather than duplicating.
+    - Don't save transient details, secrets, or anything the user asks you not to keep.
+    - Use memory silently. Don't announce searches or saves, and don't mention memory unless the user asks about it.
     """
 
     let id = UUID()
@@ -29,7 +33,7 @@ final class ChatModel: ObservableObject {
     @Published private(set) var entries: [TranscriptEntry] = []
     @Published var input = ""
     @Published private(set) var isRunning = false
-    @Published private(set) var isAwaitingFirstToken = false
+    @Published private(set) var isStreamingText = false
     @Published private(set) var usage = ChatUsage()
     @Published var focusRequest = 0
 
@@ -40,10 +44,13 @@ final class ChatModel: ObservableObject {
     private var apiMessages: [JSON] = []
     private var lastSentContext: ScreenContext?
     private var runTask: Task<Void, Never>?
+    /// Every tool call in flight, including hidden ones that never get a transcript row.
+    private var toolCalls: [String: ToolCallEntry] = [:]
+    private var callsThisTurn: [String: Int] = [:]
 
     init(tracker: AppTracker) {
         self.tracker = tracker
-        tools = ToolRegistry(tools: [ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), BashTool(), SaveMemoryTool()])
+        tools = ToolRegistry(tools: [ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), MemorySearchTool(), MemoryWriteTool()])
     }
 
     func send() {
@@ -59,7 +66,6 @@ final class ChatModel: ObservableObject {
         runTask = Task {
             await runTurn(question: question)
             isRunning = false
-            isAwaitingFirstToken = false
         }
     }
 
@@ -74,6 +80,8 @@ final class ChatModel: ObservableObject {
 
     private func runTurn(question: String) async {
         let checkpoint = apiMessages.count
+        callsThisTurn = [:]
+        toolCalls = [:]
         let context = await captureScreen()
         apiMessages.append(["role": "user", "content": [["type": "text", "text": userContent(for: question, context: context)]]])
 
@@ -106,8 +114,7 @@ final class ChatModel: ObservableObject {
     }
 
     private func streamAssistantMessage() async throws -> AssistantMessage {
-        isAwaitingFirstToken = true
-        defer { isAwaitingFirstToken = false }
+        defer { isStreamingText = false }
 
         var message = AssistantMessage()
         var textEntries: [Int: TextEntry] = [:]
@@ -123,12 +130,14 @@ final class ChatModel: ObservableObject {
                     let entry = TextEntry(role: .assistant, scroll: scroll)
                     textEntries[index] = entry
                     entries.append(.text(entry))
-                    isAwaitingFirstToken = false
+                    isStreamingText = true
                 case "tool_use":
                     let entry = ToolCallEntry(toolUseID: block["id"] as? String ?? "", name: block["name"] as? String ?? "tool")
                     toolEntries[index] = entry
-                    entries.append(.tool(entry))
-                    isAwaitingFirstToken = false
+                    toolCalls[entry.toolUseID] = entry
+                    if (try? tools.tool(named: entry.name))?.isHidden != true {
+                        entries.append(.tool(entry))
+                    }
                 default:
                     break
                 }
@@ -158,8 +167,7 @@ final class ChatModel: ObservableObject {
         var results: [JSON] = []
         for block in message.blocks where block["type"] as? String == "tool_use" {
             let id = block["id"] as? String ?? ""
-            let entry = entries.lazy.compactMap { if case .tool(let call) = $0, call.toolUseID == id { call } else { nil } }.first
-                ?? ToolCallEntry(toolUseID: id, name: block["name"] as? String ?? "tool")
+            let entry = toolCalls.removeValue(forKey: id) ?? ToolCallEntry(toolUseID: id, name: block["name"] as? String ?? "tool")
             let (output, isError) = await execute(block, entry: entry, inputIsValid: !message.invalidToolInputs.contains(id))
             var content: [JSON] = [["type": "text", "text": output.text]]
             if let jpeg = output.jpeg {
@@ -176,6 +184,10 @@ final class ChatModel: ObservableObject {
             let tool = try tools.tool(named: entry.name)
             let input = block["input"] as? JSON ?? [:]
             try tools.validate(input, for: tool)
+            callsThisTurn[tool.name, default: 0] += 1
+            if let limit = tool.maxCallsPerTurn, callsThisTurn[tool.name, default: 0] > limit {
+                throw ToolError.limitReached(tool.name, limit)
+            }
 
             if tool.requiresApproval(for: input), !(await entry.requestApproval()) {
                 entry.status = .denied

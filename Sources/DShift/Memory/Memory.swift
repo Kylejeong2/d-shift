@@ -14,7 +14,7 @@ enum Storage {
     }()
 }
 
-/// Memory is a plain folder of markdown files. The model reads and searches it with the bash tool;
+/// Memory is a plain folder of markdown files. The model searches and edits it with hidden tools;
 /// only `me.md` and the file list are sent up front.
 enum Memory {
     private static let maxListedFiles = 200
@@ -25,18 +25,6 @@ enum Memory {
         let listing = files.prefix(maxListedFiles).joined(separator: "\n")
             + (files.count > maxListedFiles ? "\n(\(files.count - maxListedFiles) more)" : "")
         return "## me.md\n\(profile)\n\n## Files\n\(listing)"
-    }
-
-    static func remember(_ note: String) throws {
-        let notes = Storage.memoryDir.appendingPathComponent("notes.md")
-        let line = "- \(ISO8601DateFormatter().string(from: Date())): \(note)\n"
-        if let handle = try? FileHandle(forWritingTo: notes) {
-            defer { try? handle.close() }
-            handle.seekToEndOfFile()
-            handle.write(Data(line.utf8))
-        } else {
-            try ("# Notes\n\n" + line).write(to: notes, atomically: true, encoding: .utf8)
-        }
     }
 
     fileprivate static func seedIfNeeded(_ dir: URL) {
@@ -87,5 +75,22 @@ enum ChatHistory {
         } else {
             try? data.write(to: file)
         }
+    }
+}
+
+enum MemoryPath {
+    /// Resolves a model-supplied relative path to a markdown file inside `rootPath`, or nil if it would escape it.
+    /// Symlinks are resolved so a link inside the folder can't point writes elsewhere.
+    static func resolve(_ relativePath: String, inRoot rootPath: String) -> String? {
+        let trimmed = relativePath.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("/"), !trimmed.hasPrefix("~") else { return nil }
+        let root = URL(fileURLWithPath: rootPath, isDirectory: true).standardizedFileURL
+        let url = root.appendingPathComponent(trimmed).standardizedFileURL
+        let resolvedRoot = root.resolvingSymlinksInPath().path
+        guard url.pathExtension == "md",
+              url.path.hasPrefix(root.path + "/"),
+              url.deletingLastPathComponent().resolvingSymlinksInPath().path.hasPrefix(resolvedRoot)
+        else { return nil }
+        return url.path
     }
 }

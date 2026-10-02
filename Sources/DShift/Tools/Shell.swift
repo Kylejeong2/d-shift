@@ -1,32 +1,6 @@
 import Foundation
 
-/// Runs shell commands in the memory folder. See `ShellPolicy` for which commands run without approval.
-struct BashTool: Tool {
-    let name = "bash"
-    let description = """
-    Run a bash command with the working directory set to the user's memory folder (markdown files). Use it to search \
-    and read memory: `rg -n -i "term" .`, `grep -rni "term" .`, `find . -name "*.md"`, `cat people/alex.md`. Keep \
-    paths relative. Commands that write files or leave the folder ask the user for approval first.
-    """
-    let inputSchema: JSON = [
-        "type": "object",
-        "properties": ["command": ["type": "string", "description": "The bash command to run."]],
-        "required": ["command"],
-        "additionalProperties": false,
-    ]
-
-    func requiresApproval(for input: JSON) -> Bool {
-        !ShellPolicy.isReadOnlyWithinFolder(input["command"] as? String ?? "")
-    }
-
-    func run(_ input: JSON) async throws -> ToolOutput {
-        let command = input["command"] as? String ?? ""
-        let directory = Storage.memoryDir
-        return await Task.detached { ToolOutput(text: ShellRunner.run(command, in: directory)) }.value
-    }
-}
-
-/// Decides which commands are safe to run without asking. The gate matters because the model also reads screen
+/// Decides which shell commands memory search may run. The gate matters because the model also reads screen
 /// content, which may contain injected instructions. Allowed: a pipeline of allowlisted read-only programs with
 /// relative paths and no redirection, substitution, chaining, or command-executing flags.
 enum ShellPolicy {

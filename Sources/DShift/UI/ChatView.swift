@@ -173,7 +173,7 @@ private struct TranscriptView: View {
                             case .tool(let call): ToolCallRow(entry: call)
                             }
                         }
-                        if model.isAwaitingFirstToken {
+                        if model.isRunning && !model.isStreamingText {
                             ThinkingRow()
                         }
                         Color.clear
@@ -192,7 +192,7 @@ private struct TranscriptView: View {
                 }
                 .onAppear { scrollToBottom(proxy) }
                 .onChange(of: scroll.tick) { if isPinnedToBottom { scrollToBottom(proxy) } }
-                .onChange(of: model.isAwaitingFirstToken) { if isPinnedToBottom { scrollToBottom(proxy) } }
+                .onChange(of: model.isStreamingText) { if isPinnedToBottom { scrollToBottom(proxy) } }
                 .onChange(of: model.entries.count) {
                     // Sending a message always jumps to the bottom; model output only follows while pinned.
                     if case .text(let last) = model.entries.last, last.role == .user { isPinnedToBottom = true }
@@ -270,7 +270,7 @@ private struct EmptyState: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Ask about what's on your screen.")
-            Text("Tell it facts about yourself to save them to memory. /clear resets the chat.")
+            Text("It remembers what you tell it about yourself. /clear resets the chat.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
         }
