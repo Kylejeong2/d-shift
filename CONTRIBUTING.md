@@ -34,4 +34,4 @@ PR descriptions use the template in `.github/pull_request_template.md`: Summary,
 
 ## Releases
 
-Versions follow [Semantic Versioning](https://semver.org). While the version is 0.x, minor bumps may include breaking changes. Changes are recorded in [CHANGELOG.md](CHANGELOG.md), and releases are tagged `vX.Y.Z`.
+Versions follow [Semantic Versioning](https://semver.org). While the version is 0.x, minor bumps may include breaking changes. Changes are recorded in [CHANGELOG.md](CHANGELOG.md). Pushing a `vX.Y.Z` tag runs the Release workflow, which builds the app and publishes it with that version's changelog notes.

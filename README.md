@@ -9,13 +9,23 @@ A screen-aware AI sidebar for macOS. Double-tap **Shift** anywhere, ask a questi
 
 > Status: early (v0.x). macOS only. Expect rough edges and breaking changes.
 
-## Requirements
+## Install
 
-- macOS 14 (Sonoma) or later
-- Swift 5.9+ (Xcode or the Command Line Tools: `xcode-select --install`)
-- An [Anthropic API key](https://console.anthropic.com)
+1. Download `D-Shift-<version>.zip` from the [latest release](https://github.com/Kylejeong2/d-shift/releases/latest), unzip it, and drag **D-Shift.app** into Applications.
+2. Open it. Builds aren't notarized by Apple yet, so macOS blocks the first launch. Go to **System Settings > Privacy & Security**, scroll down, and click **Open Anyway** next to the D-Shift message. Or run:
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/D-Shift.app
+   ```
+3. Grant **Accessibility** when asked (System Settings > Privacy & Security > Accessibility), then quit and reopen D-Shift from the menu bar icon.
+4. Double-tap **Shift**, paste your [Anthropic API key](https://console.anthropic.com/settings/keys), and click Save. The key is stored in your Keychain.
 
-## Quick start
+Requires macOS 14 (Sonoma) or later, on Apple silicon or Intel.
+
+**Updating:** replace the app in Applications. Because builds are ad-hoc signed, macOS may treat each update as a new app. If double-Shift stops working, remove D-Shift from the Accessibility list, add it again, and relaunch.
+
+## Run from source
+
+Requires Swift 5.9+ (Xcode or the Command Line Tools: `xcode-select --install`) and an [Anthropic API key](https://console.anthropic.com).
 
 ```bash
 git clone https://github.com/Kylejeong2/d-shift.git
@@ -35,7 +45,7 @@ Double-tap **Shift** to open or close the sidebar.
 | Accessibility | Detect double-Shift, read the focused window's accessibility tree, follow the active app | First launch |
 | Screen Recording | The `take_screenshot` tool | The first time the model takes a screenshot |
 
-When you launch with `swift run`, macOS attributes these permissions to your **terminal app**, not to D-Shift. Grant them to the terminal and relaunch.
+The downloaded app asks for these as D-Shift. When you launch with `swift run`, macOS attributes them to your **terminal app** instead. Grant them to the terminal and relaunch.
 
 ## Using it
 
@@ -101,11 +111,11 @@ See [docs/memory.md](docs/memory.md).
 
 ## Configuration
 
-Settings are read from the environment first, then `./.env`, then `~/.config/dshift/.env`.
+Settings are read from the environment first, then `./.env`, then `~/.config/dshift/.env`, then the Keychain (where the in-app setup screen saves the API key).
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | none (required) | API key |
+| `ANTHROPIC_API_KEY` | none (required) | API key. The app asks for it on first use if it isn't set elsewhere. Change it from the menu bar icon > Change API Key. |
 | `DSHIFT_DATA_DIR` | `~/Library/Application Support/DShift` | Memory and chat history location |
 
 Model settings live in `Sources/DShift/Chat/ClaudeClient.swift`: the model (`claude-opus-5-5`) and effort (`low`, for fast sidebar answers).
@@ -124,7 +134,18 @@ Model settings live in `Sources/DShift/Chat/ClaudeClient.swift`: the model (`cla
 swift build            # debug build
 swift run              # build and launch
 ./scripts/test.sh      # run tests (works with Xcode or Command Line Tools only)
+./scripts/bundle.sh    # build dist/D-Shift.app and a zip (universal, ad-hoc signed)
 ```
+
+### Releasing
+
+Add the version's notes to `CHANGELOG.md`, then push a tag:
+
+```bash
+git tag -a v0.3.0 -m "v0.3.0" && git push origin v0.3.0
+```
+
+The Release workflow runs the tests, builds the universal app, and publishes a GitHub release with the zip and that version's changelog section. To ship signed and notarized builds, run `scripts/bundle.sh` with `CODESIGN_IDENTITY` (a Developer ID Application identity) and `NOTARY_PROFILE` set; see the comments at the top of the script.
 
 Project layout:
 
@@ -147,7 +168,8 @@ Adding a tool: implement the `Tool` protocol in `Sources/DShift/Tools/`, return 
 - Inline autocomplete in any text field using the same context and memory, with local inference via MLX ([docs/roadmap-autocomplete.md](docs/roadmap-autocomplete.md))
 - Persist chat tabs across restarts
 - OCR fallback for apps with thin accessibility trees
-- Packaged, signed `.app` release
+- Developer ID signing and notarization for releases, so there's no Gatekeeper warning
+- Launch at login
 
 ## Contributing
 

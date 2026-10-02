@@ -4,8 +4,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-02
+
 ### Added
 
+- Downloadable app: universal (Apple silicon and Intel) `D-Shift.app` attached to each GitHub release, built by `scripts/bundle.sh` and a release workflow on version tags.
+- In-app API key setup stored in the macOS Keychain, and a Change API Key menu item, so the app works without a cloned repo or `.env` file.
 - Browser-style text zoom: Cmd+= and Cmd+- step the text size from 80% to 200%, Cmd+0 resets. The level is remembered.
 - Message queue: send while Claude is replying and messages run in order. Queued messages can be sent immediately or removed; Stop pauses the queue.
 - Cmd+Return sends immediately, interrupting the current reply. Interrupted replies stay in the conversation as context.
@@ -38,5 +42,6 @@ All notable changes to this project are documented here. The format follows [Kee
 - Per-chat usage bar: context window percentage, tokens, cache hit rate, and estimated cost.
 - Resizable panel with persisted size, and pinned auto-scroll.
 
-[Unreleased]: https://github.com/Kylejeong2/d-shift/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Kylejeong2/d-shift/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Kylejeong2/d-shift/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Kylejeong2/d-shift/releases/tag/v0.1.0

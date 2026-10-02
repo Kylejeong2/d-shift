@@ -19,4 +19,4 @@ Especially interesting:
 
 - Screen context and memory overviews are sent to the Anthropic API by design. See the Privacy section of the README.
 - Memory is written automatically, so on-screen content could influence what gets saved (memory poisoning). Writes are confined to markdown in the memory folder.
-- Builds are currently unsigned and run from source.
+- Release builds are ad-hoc signed, not notarized. Download them only from this repository's Releases page.
