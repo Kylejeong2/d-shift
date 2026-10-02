@@ -10,20 +10,69 @@ private enum Theme {
 
 struct SidebarView: View {
     @ObservedObject var store: ChatStore
+    @ObservedObject var apiKeys = APIKeyStore.shared
     let onClose: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             TabStrip(store: store, onClose: onClose)
-            AppContextHeader(tracker: store.tracker)
-            Divider().opacity(0.25)
-            ChatView(model: store.selected)
-                .id(store.selectedID)
+            if apiKeys.hasKey {
+                AppContextHeader(tracker: store.tracker)
+                Divider().opacity(0.25)
+                ChatView(model: store.selected)
+                    .id(store.selectedID)
+            } else {
+                APIKeySetupView(apiKeys: apiKeys)
+            }
         }
         .background { TextZoomShortcuts() }
         // Clicking anywhere that isn't a control puts the cursor in the input. Child buttons and tabs win over this.
         .contentShape(Rectangle())
         .onTapGesture { store.selected.focusRequest += 1 }
+    }
+}
+
+private struct APIKeySetupView: View {
+    let apiKeys: APIKeyStore
+    @State private var key = ""
+    @State private var saveFailed = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Add your Anthropic API key")
+                .scaledFont(15, weight: .semibold)
+            Text("D-Shift sends your questions and screen context to Claude using your own key. The key is stored in your macOS Keychain.")
+                .scaledFont(12)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            SecureField("sk-ant-...", text: $key)
+                .textFieldStyle(.plain)
+                .scaledFont(13)
+                .padding(10)
+                .background(Theme.surfaceFill, in: Theme.surfaceShape)
+                .overlay(Theme.surfaceShape.strokeBorder(Theme.stroke))
+                .onSubmit(save)
+            if saveFailed {
+                Text("Couldn't save the key to the Keychain. Try again.")
+                    .scaledFont(11)
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Link("Get a key", destination: URL(string: "https://console.anthropic.com/settings/keys")!)
+                    .scaledFont(12)
+                Spacer()
+                Button("Save", action: save)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(key.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            Spacer()
+        }
+        .padding(16)
+    }
+
+    private func save() {
+        saveFailed = !apiKeys.save(key)
+        if !saveFailed { key = "" }
     }
 }
 

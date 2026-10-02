@@ -1,11 +1,12 @@
 import Foundation
 
-/// Settings come from the process environment first, then from dotenv files.
+/// Settings come from the process environment first, then dotenv files, then the keychain (where the app's
+/// setup screen saves the API key).
 /// Nothing user-specific is hardcoded so the app works the same for anyone who clones the repo.
 enum Config {
     static func value(_ name: String) -> String? {
         if let value = ProcessInfo.processInfo.environment[name], !value.isEmpty { return value }
-        return dotenvFiles.lazy.compactMap { dotenvValue(name, in: $0) }.first
+        return dotenvFiles.lazy.compactMap { dotenvValue(name, in: $0) }.first ?? Keychain.read(name)
     }
 
     /// Where memory and chat history live. Defaults to Application Support so personal data sits outside the repo.

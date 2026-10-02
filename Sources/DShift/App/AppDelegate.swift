@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: "Toggle Sidebar (Shift Shift)", action: #selector(toggleSidebar), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Open Memory Folder", action: #selector(openMemory), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Change API Key...", action: #selector(changeAPIKey), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit D-Shift", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
@@ -32,4 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func toggleSidebar() { sidebar.toggle() }
     @objc private func openMemory() { NSWorkspace.shared.open(Storage.memoryDir) }
+
+    @objc private func changeAPIKey() {
+        APIKeyStore.shared.reset()
+        sidebar.reveal()
+    }
 }

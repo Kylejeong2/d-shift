@@ -19,7 +19,7 @@ enum ClaudeError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            "No API key. Set ANTHROPIC_API_KEY in .env (see .env.example) or export it."
+            "No API key. Add one from the menu bar icon > Change API Key, or set ANTHROPIC_API_KEY in .env."
         case .http(let status, let body):
             "HTTP \(status): \(body)"
         case .stream(let message):

@@ -115,6 +115,10 @@ final class SidebarController {
         panel.isVisible ? panel.orderOut(nil) : show()
     }
 
+    func reveal() {
+        if !panel.isVisible { show() }
+    }
+
     private func show() {
         let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
         if let visible = screen?.visibleFrame {
