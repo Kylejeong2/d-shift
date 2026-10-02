@@ -20,6 +20,9 @@ struct SidebarView: View {
             ChatView(model: store.selected)
                 .id(store.selectedID)
         }
+        // Clicking anywhere that isn't a control puts the cursor in the input. Child buttons and tabs win over this.
+        .contentShape(Rectangle())
+        .onTapGesture { store.selected.focusRequest += 1 }
     }
 }
 

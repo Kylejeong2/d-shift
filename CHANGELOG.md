@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Clicking anywhere in the sidebar that isn't a button focuses the input.
 - Resize the panel from the top edge and the top-left and bottom-left corners. Vertical position is remembered along with size, and resize cursors now appear even though the panel never activates the app.
 
 ### Changed
