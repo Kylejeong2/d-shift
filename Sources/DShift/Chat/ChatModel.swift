@@ -34,6 +34,8 @@ final class ChatModel: ObservableObject {
     @Published var input = ""
     @Published private(set) var isRunning = false
     @Published private(set) var isStreamingText = false
+    @Published private(set) var queue: [QueuedMessage] = []
+    @Published private(set) var isQueuePaused = false
     @Published private(set) var usage = ChatUsage()
     @Published var focusRequest = 0
 
@@ -47,32 +49,91 @@ final class ChatModel: ObservableObject {
     /// Every tool call in flight, including hidden ones that never get a transcript row.
     private var toolCalls: [String: ToolCallEntry] = [:]
     private var callsThisTurn: [String: Int] = [:]
+    private var pendingTakeover: String?
 
     init(tracker: AppTracker) {
         self.tracker = tracker
         tools = ToolRegistry(tools: [ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), MemorySearchTool(), MemoryWriteTool()])
     }
 
+    /// Return: sends now when idle, otherwise queues behind the running turn.
     func send() {
-        let question = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !question.isEmpty, !isRunning else { return }
-        input = ""
+        guard let question = takeInput() else { return }
         if question == "/clear" { return clear() }
-        if entries.isEmpty { title = String(question.prefix(28)) }
+        isQueuePaused = false
+        if isRunning {
+            queue.append(QueuedMessage(text: question))
+        } else {
+            start(question)
+        }
+    }
 
+    /// Cmd+Return: skips the queue, interrupting the running turn if there is one.
+    func sendNow() {
+        guard let question = takeInput() else { return }
+        if question == "/clear" { return clear() }
+        takeOver(with: question)
+    }
+
+    func sendQueuedNow(_ id: UUID) {
+        guard let index = queue.firstIndex(where: { $0.id == id }) else { return }
+        takeOver(with: queue.remove(at: index).text)
+    }
+
+    func removeQueued(_ id: UUID) {
+        queue.removeAll { $0.id == id }
+    }
+
+    func resumeQueue() {
+        isQueuePaused = false
+        if !isRunning { advanceQueue() }
+    }
+
+    /// Stops the running turn. Queued messages stay but pause until the user sends or resumes.
+    func stop() {
+        if !queue.isEmpty { isQueuePaused = true }
+        interrupt()
+    }
+
+    private func takeInput() -> String? {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        input = ""
+        return text
+    }
+
+    private func takeOver(with question: String) {
+        isQueuePaused = false
+        guard isRunning else { return start(question) }
+        pendingTakeover = question
+        interrupt()
+    }
+
+    private func interrupt() {
+        runTask?.cancel()
+        for case .tool(let call) in entries where call.status == .awaitingApproval {
+            call.resolveApproval(false)
+        }
+    }
+
+    private func start(_ question: String) {
+        if entries.isEmpty { title = String(question.prefix(28)) }
         entries.append(.text(TextEntry(role: .user, text: question)))
         ChatHistory.append(role: "user", text: question, app: tracker.app?.localizedName, chat: id)
         isRunning = true
         runTask = Task {
             await runTurn(question: question)
             isRunning = false
+            advanceQueue()
         }
     }
 
-    func stop() {
-        runTask?.cancel()
-        for case .tool(let call) in entries where call.status == .awaitingApproval {
-            call.resolveApproval(false)
+    private func advanceQueue() {
+        if let takeover = pendingTakeover {
+            pendingTakeover = nil
+            start(takeover)
+        } else if !isQueuePaused, !queue.isEmpty {
+            start(queue.removeFirst().text)
         }
     }
 
@@ -82,8 +143,10 @@ final class ChatModel: ObservableObject {
         let checkpoint = apiMessages.count
         callsThisTurn = [:]
         toolCalls = [:]
+        let firstReplyIndex = entries.count
         let context = await captureScreen()
-        apiMessages.append(["role": "user", "content": [["type": "text", "text": userContent(for: question, context: context)]]])
+        let content = userContent(for: question, context: context)
+        apiMessages.append(["role": "user", "content": [["type": "text", "text": content]]])
 
         do {
             for _ in 0..<Self.maxAgentIterations {
@@ -105,12 +168,30 @@ final class ChatModel: ObservableObject {
                 }
             }
             appendNote("Stopped after \(Self.maxAgentIterations) steps.")
+        } catch is CancellationError {
+            keepInterruptedTurn(since: checkpoint, userContent: content, firstReplyIndex: firstReplyIndex)
+        } catch where Task.isCancelled {
+            keepInterruptedTurn(since: checkpoint, userContent: content, firstReplyIndex: firstReplyIndex)
         } catch {
             // Roll back to before this turn so the transcript never holds a tool_use without its result.
             apiMessages.removeSubrange(checkpoint...)
             lastSentContext = nil
-            appendNote(error is CancellationError || Task.isCancelled ? "Stopped." : "**Error:** \(error.localizedDescription)")
+            appendNote("**Error:** \(error.localizedDescription)")
         }
+    }
+
+    /// After a stop or takeover, keep the question and whatever was said so far as plain text, so the next message
+    /// has context. Tool calls from the interrupted turn are dropped to keep the transcript valid.
+    private func keepInterruptedTurn(since checkpoint: Int, userContent: String, firstReplyIndex: Int) {
+        let partialReply = entries.dropFirst(firstReplyIndex)
+            .compactMap { if case .text(let entry) = $0, entry.role == .assistant { entry.text } else { nil } }
+            .joined(separator: "\n\n")
+        apiMessages.removeSubrange(checkpoint...)
+        apiMessages.append(["role": "user", "content": [["type": "text", "text": userContent]]])
+        apiMessages.append(["role": "assistant", "content": [["type": "text", "text": partialReply.isEmpty
+            ? "(Interrupted by the user before answering.)"
+            : partialReply + "\n\n(Interrupted by the user.)"]]])
+        appendNote("Stopped.")
     }
 
     private func streamAssistantMessage() async throws -> AssistantMessage {
@@ -232,7 +313,10 @@ final class ChatModel: ObservableObject {
     }
 
     private func clear() {
-        stop()
+        queue = []
+        pendingTakeover = nil
+        isQueuePaused = false
+        interrupt()
         entries = []
         apiMessages = []
         lastSentContext = nil

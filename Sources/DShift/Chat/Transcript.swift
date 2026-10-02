@@ -6,6 +6,11 @@ final class ScrollSignal: ObservableObject {
     @Published var tick = 0
 }
 
+struct QueuedMessage: Identifiable {
+    let id = UUID()
+    let text: String
+}
+
 enum TranscriptEntry: Identifiable {
     case text(TextEntry)
     case tool(ToolCallEntry)

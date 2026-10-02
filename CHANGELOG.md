@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Message queue: send while Claude is replying and messages run in order. Queued messages can be sent immediately or removed; Stop pauses the queue.
+- Cmd+Return sends immediately, interrupting the current reply. Interrupted replies stay in the conversation as context.
 - Closing the last chat tab hides the sidebar; it reopens with a fresh chat.
 - Clicking anywhere in the sidebar that isn't a button focuses the input.
 - Resize the panel from the top edge and the top-left and bottom-left corners. Vertical position is remembered along with size, and resize cursors now appear even though the panel never activates the app.

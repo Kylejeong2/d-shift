@@ -32,6 +32,9 @@ private struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             TranscriptView(model: model, scroll: model.scroll)
+            if !model.queue.isEmpty {
+                QueueView(model: model)
+            }
             UsageBar(usage: model.usage)
             InputBar(model: model)
         }
@@ -436,18 +439,79 @@ private struct ApprovalButtons: View {
     }
 }
 
+private struct QueueView: View {
+    @ObservedObject var model: ChatModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(model.isQueuePaused ? "Queued, paused" : "Queued")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if model.isQueuePaused {
+                    Button("Resume", action: model.resumeQueue)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            ForEach(model.queue) { message in
+                QueuedRow(
+                    text: message.text,
+                    onSendNow: { model.sendQueuedNow(message.id) },
+                    onRemove: { model.removeQueued(message.id) }
+                )
+            }
+        }
+        .padding(10)
+        .background(Theme.surfaceFill, in: Theme.surfaceShape)
+        .overlay(Theme.surfaceShape.strokeBorder(Theme.stroke))
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+    }
+}
+
+private struct QueuedRow: View {
+    let text: String
+    let onSendNow: () -> Void
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(text)
+                .font(.system(size: 12))
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            IconButton(systemName: "arrow.up", help: "Send now (interrupts the current reply)", action: onSendNow)
+            IconButton(systemName: "xmark", help: "Remove from queue", action: onRemove)
+        }
+    }
+}
+
 private struct InputBar: View {
     @ObservedObject var model: ChatModel
     @FocusState private var isFocused: Bool
 
     var body: some View {
         HStack(spacing: 8) {
-            TextField("Ask about your screen...", text: $model.input, axis: .vertical)
+            TextField(model.isRunning ? "Queue a message, or Cmd+Return to send now" : "Ask about your screen...", text: $model.input, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .lineLimit(1...6)
                 .focused($isFocused)
+                .onKeyPress(.return, phases: .down) { press in
+                    guard press.modifiers.contains(.command) else { return .ignored }
+                    model.sendNow()
+                    return .handled
+                }
                 .onSubmit(model.send)
+            // Backup for Cmd+Return in case the field consumes the key press first; a second call finds empty input.
+            Button("", action: model.sendNow)
+                .keyboardShortcut(.return, modifiers: .command)
+                .hidden()
+                .frame(width: 0)
             if model.isRunning {
                 Button(action: model.stop) {
                     Image(systemName: "stop.circle.fill")
