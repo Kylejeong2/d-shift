@@ -22,6 +22,8 @@ final class SidebarController {
     private static let backdropOpacity: CGFloat = 0.78
     private static let widthKey = "sidebar.width"
     private static let heightKey = "sidebar.height"
+    private static let topInsetKey = "sidebar.topInset"
+    private static let cornerHandleSize: CGFloat = 14
 
     private let store = ChatStore()
     private let panel: SidebarPanel
@@ -64,26 +66,44 @@ final class SidebarController {
         }
         panel.contentView = container
 
-        let saveSize: (CGSize) -> Void = { size in
-            UserDefaults.standard.set(Double(size.width), forKey: Self.widthKey)
-            UserDefaults.standard.set(Double(size.height), forKey: Self.heightKey)
-        }
-        let leftHandle = ResizeHandle(edge: .left, onResizeEnd: saveSize)
-        let bottomHandle = ResizeHandle(edge: .bottom, onResizeEnd: saveSize)
-        for handle in [leftHandle, bottomHandle] {
+        let handleEdges: [ResizeHandle.Edges] = [.left, .top, .bottom, [.top, .left], [.bottom, .left]]
+        for edges in handleEdges {
+            let handle = ResizeHandle(edges: edges) { [weak self] frame in self?.saveFrame(frame) }
             handle.translatesAutoresizingMaskIntoConstraints = false
             container.addSubview(handle)
+            let thickness = Self.handleThickness
+            let corner = Self.cornerHandleSize
+            var constraints: [NSLayoutConstraint] = []
+            if edges.contains(.left) {
+                constraints.append(handle.leadingAnchor.constraint(equalTo: container.leadingAnchor))
+            }
+            switch edges {
+            case .left:
+                constraints += [
+                    handle.widthAnchor.constraint(equalToConstant: thickness),
+                    handle.topAnchor.constraint(equalTo: container.topAnchor, constant: corner),
+                    handle.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -corner),
+                ]
+            case .top, .bottom:
+                constraints += [
+                    handle.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: corner),
+                    handle.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+                    handle.heightAnchor.constraint(equalToConstant: thickness),
+                    edges == .top
+                        ? handle.topAnchor.constraint(equalTo: container.topAnchor)
+                        : handle.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                ]
+            default:
+                constraints += [
+                    handle.widthAnchor.constraint(equalToConstant: corner),
+                    handle.heightAnchor.constraint(equalToConstant: corner),
+                    edges.contains(.top)
+                        ? handle.topAnchor.constraint(equalTo: container.topAnchor)
+                        : handle.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+                ]
+            }
+            NSLayoutConstraint.activate(constraints)
         }
-        NSLayoutConstraint.activate([
-            leftHandle.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            leftHandle.topAnchor.constraint(equalTo: container.topAnchor),
-            leftHandle.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            leftHandle.widthAnchor.constraint(equalToConstant: Self.handleThickness),
-            bottomHandle.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            bottomHandle.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            bottomHandle.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            bottomHandle.heightAnchor.constraint(equalToConstant: Self.handleThickness),
-        ])
     }
 
     func toggle() {
@@ -97,13 +117,16 @@ final class SidebarController {
             let maxWidth = visible.width - Self.edgeInset * 2
             panel.maxSize = CGSize(width: maxWidth, height: maxHeight)
 
-            let savedWidth = UserDefaults.standard.double(forKey: Self.widthKey)
-            let savedHeight = UserDefaults.standard.double(forKey: Self.heightKey)
+            let defaults = UserDefaults.standard
+            let savedWidth = defaults.double(forKey: Self.widthKey)
+            let savedHeight = defaults.double(forKey: Self.heightKey)
             let width = min(max(savedWidth > 0 ? savedWidth : Self.defaultWidth, Self.minSize.width), maxWidth)
             let height = min(max(savedHeight > 0 ? savedHeight : maxHeight, Self.minSize.height), maxHeight)
+            let savedTopInset = defaults.object(forKey: Self.topInsetKey) as? Double ?? Self.edgeInset
+            let topInset = min(max(savedTopInset, 0), visible.height - height)
             panel.setFrame(NSRect(
                 x: visible.maxX - width - Self.edgeInset,
-                y: visible.maxY - height - Self.edgeInset,
+                y: visible.maxY - topInset - height,
                 width: width,
                 height: height
             ), display: true)
@@ -111,6 +134,16 @@ final class SidebarController {
         panel.makeKeyAndOrderFront(nil)
         panel.invalidateShadow()
         store.selected.focusRequest += 1
+    }
+
+    /// Remembers size and vertical position; the panel always re-docks to the right edge of the screen.
+    private func saveFrame(_ frame: NSRect) {
+        let defaults = UserDefaults.standard
+        defaults.set(Double(frame.width), forKey: Self.widthKey)
+        defaults.set(Double(frame.height), forKey: Self.heightKey)
+        if let visible = panel.screen?.visibleFrame {
+            defaults.set(Double(visible.maxY - frame.maxY), forKey: Self.topInsetKey)
+        }
     }
 
     private static func pin(_ view: NSView, in container: NSView) {

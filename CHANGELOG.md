@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- Resize the panel from the top edge and the top-left and bottom-left corners. Vertical position is remembered along with size, and resize cursors now appear even though the panel never activates the app.
+
 ### Changed
 
 - Memory works in the background: `bash` and `save_memory` are replaced by hidden `search_memory` (read-only shell) and `write_memory` (`.md` files in the memory folder) tools. The model consults and updates memory without asking or announcing it.

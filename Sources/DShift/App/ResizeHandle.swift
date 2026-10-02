@@ -1,17 +1,22 @@
 import AppKit
 
-/// Invisible strip along a panel edge that resizes the window while keeping the opposite edge pinned.
-/// The panel docks to the top-right, so the left edge controls width and the bottom edge controls height.
+/// Invisible strip or corner on the panel's edge that resizes the window, keeping the opposite edges pinned.
+/// The panel docks to the right of the screen, so only the left, top, and bottom edges are draggable.
 final class ResizeHandle: NSView {
-    enum Edge { case left, bottom }
+    struct Edges: OptionSet {
+        let rawValue: Int
+        static let left = Edges(rawValue: 1 << 0)
+        static let top = Edges(rawValue: 1 << 1)
+        static let bottom = Edges(rawValue: 1 << 2)
+    }
 
-    private let edge: Edge
-    private let onResizeEnd: (CGSize) -> Void
+    private let edges: Edges
+    private let onResizeEnd: (NSRect) -> Void
     private var dragStartMouse: NSPoint = .zero
     private var dragStartFrame: NSRect = .zero
 
-    init(edge: Edge, onResizeEnd: @escaping (CGSize) -> Void) {
-        self.edge = edge
+    init(edges: Edges, onResizeEnd: @escaping (NSRect) -> Void) {
+        self.edges = edges
         self.onResizeEnd = onResizeEnd
         super.init(frame: .zero)
     }
@@ -22,9 +27,16 @@ final class ResizeHandle: NSView {
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    override func resetCursorRects() {
-        addCursorRect(bounds, cursor: edge == .left ? .resizeLeftRight : .resizeUpDown)
+    // Cursor rects only apply in the active app, and the panel never activates D-Shift, so track hover directly.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
     }
+
+    override func mouseEntered(with event: NSEvent) { cursor.set() }
+
+    override func mouseExited(with event: NSEvent) { NSCursor.arrow.set() }
 
     override func mouseDown(with event: NSEvent) {
         dragStartMouse = NSEvent.mouseLocation
@@ -33,24 +45,47 @@ final class ResizeHandle: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard let window else { return }
+        cursor.set()
         let mouse = NSEvent.mouseLocation
+        let dx = mouse.x - dragStartMouse.x
+        let dy = mouse.y - dragStartMouse.y
         var frame = dragStartFrame
-        switch edge {
-        case .left:
-            frame.size.width = clamp(dragStartFrame.width - (mouse.x - dragStartMouse.x), window.minSize.width, window.maxSize.width)
+
+        if edges.contains(.left) {
+            frame.size.width = clamp(dragStartFrame.width - dx, window.minSize.width, window.maxSize.width)
             frame.origin.x = dragStartFrame.maxX - frame.width
-        case .bottom:
-            frame.size.height = clamp(dragStartFrame.height - (mouse.y - dragStartMouse.y), window.minSize.height, window.maxSize.height)
+        }
+        if edges.contains(.top) {
+            let screenTop = window.screen?.visibleFrame.maxY ?? .greatestFiniteMagnitude
+            let maxHeight = min(window.maxSize.height, screenTop - dragStartFrame.minY)
+            frame.size.height = clamp(dragStartFrame.height + dy, window.minSize.height, maxHeight)
+        }
+        if edges.contains(.bottom) {
+            let screenBottom = window.screen?.visibleFrame.minY ?? 0
+            let maxHeight = min(window.maxSize.height, dragStartFrame.maxY - screenBottom)
+            frame.size.height = clamp(dragStartFrame.height - dy, window.minSize.height, maxHeight)
             frame.origin.y = dragStartFrame.maxY - frame.height
         }
         window.setFrame(frame, display: true)
     }
 
     override func mouseUp(with event: NSEvent) {
-        if let size = window?.frame.size { onResizeEnd(size) }
+        if let frame = window?.frame { onResizeEnd(frame) }
+    }
+
+    private var cursor: NSCursor {
+        switch edges {
+        case .left: return .resizeLeftRight
+        case .top, .bottom: return .resizeUpDown
+        default:
+            if #available(macOS 15, *) {
+                return .frameResize(position: edges.contains(.top) ? .topLeft : .bottomLeft, directions: .all)
+            }
+            return .crosshair
+        }
     }
 
     private func clamp(_ value: CGFloat, _ lower: CGFloat, _ upper: CGFloat) -> CGFloat {
-        min(max(value, lower), upper)
+        min(max(value, lower), max(lower, upper))
     }
 }

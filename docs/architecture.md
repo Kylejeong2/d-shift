@@ -22,7 +22,7 @@ D-Shift is a single SwiftPM executable built on AppKit with SwiftUI views inside
 - A `NSVisualEffectView` backdrop at reduced opacity under a sibling `NSHostingView`. Only the backdrop is translucent, and the text stays fully opaque.
 - Continuous-curve corners (`cornerCurve = .continuous`) to match macOS.
 
-The window is docked to the top-right. `ResizeHandle` views on the left and bottom edges resize it with the opposite edges pinned, and the size is saved to `UserDefaults`.
+The window docks to the right edge. `ResizeHandle` views on the left, top, and bottom edges and the two left corners resize it with the opposite edges pinned, clamped to the screen. Size and distance from the top of the screen are saved to `UserDefaults`. Handles use always-active tracking areas for their cursors, because cursor rects only apply in the active app.
 
 ## Double-Shift detection
 
