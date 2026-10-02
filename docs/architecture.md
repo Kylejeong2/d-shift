@@ -42,7 +42,7 @@ Each tab owns a `ChatModel`, which keeps its API transcript as raw JSON content 
 
 1. **User turn:** `<screen>` (only if it changed since the last send), `<memory>` (me.md plus the file list), then the question.
 2. **Stream:** `ClaudeClient` turns SSE lines into `StreamEvent`s at content-block granularity. `AssistantMessage` accumulates blocks verbatim, including thinking blocks and their signatures, so they can be sent back unchanged as the API requires during tool use.
-3. **Tools:** on `stop_reason == "tool_use"`, each `tool_use` block is validated, approved if needed, and run. The results go back in a single user message. Images (screenshots) are sent as image blocks inside `tool_result`.
+3. **Tools:** on `stop_reason == "tool_use"`, each `tool_use` block is validated, checked against its per-question call limit, approved if needed, and run. Hidden tools (memory, `read_screen`) run without a transcript row. The results go back in a single user message. Images (screenshots) are sent as image blocks inside `tool_result`.
 4. The loop repeats on `tool_use` and `pause_turn`, up to 12 iterations. `refusal` and `max_tokens` end it with a note.
 5. **Failure or Stop:** the transcript rolls back to before the turn, so it never contains a `tool_use` without its result.
 

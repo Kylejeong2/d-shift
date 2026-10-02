@@ -10,12 +10,13 @@ Please do **not** open a public issue. Use GitHub's [private vulnerability repor
 
 Especially interesting:
 
-- Bypasses of `ShellPolicy`: a command that runs without approval but writes files, executes other programs, or reads outside the memory folder.
+- Bypasses of `ShellPolicy`: a memory search command that writes files, executes other programs, or reads outside the memory folder.
+- Bypasses of `MemoryPath`: a memory write that lands outside the memory folder or in a non-markdown file.
 - Prompt-injection paths where on-screen content leads to an unapproved state change.
 - Leakage of the API key, memory, or history outside the documented data flows.
 
 ## Known limitations
 
 - Screen context and memory overviews are sent to the Anthropic API by design. See the Privacy section of the README.
-- Approved commands run with your user's full permissions. Read the approval card before clicking Allow.
+- Memory is written automatically, so on-screen content could influence what gets saved (memory poisoning). Writes are confined to markdown in the memory folder.
 - Builds are currently unsigned and run from source.

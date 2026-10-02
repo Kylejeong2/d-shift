@@ -2,8 +2,8 @@
 
 A screen-aware AI sidebar for macOS. Double-tap **Shift** anywhere, ask a question, and Claude answers using what's on your screen and a local memory of who you are.
 
-- **Sees your screen without screenshots by default.** It reads the macOS accessibility tree of the window you're looking at, which is exact and cheap. When that isn't enough (images, charts, design apps) the model can take a screenshot.
-- **Remembers you, locally.** Memory is a plain folder of markdown files on your Mac. The model searches it with `grep`/`rg` through a sandboxed Bash tool, and asks before it writes anything.
+- **Sees your screen without screenshots by default.** It reads the macOS accessibility tree of the window you're looking at, which is exact and cheap. Only when that isn't enough (images, charts, design apps) does the model take a screenshot, at most one per question.
+- **Remembers you, locally.** Memory is a plain folder of markdown files on your Mac. The model searches it with `grep`/`rg` and saves what it learns about you in the background, without cluttering the chat.
 - **Stays out of the way.** A translucent, non-activating panel that floats over every app and Space, never steals focus from the app you're asking about, and is hidden from screen recordings.
 - **Multiple chats.** Tabs, each with its own conversation and model session, plus live token, context-window, cache, and cost stats per chat.
 
@@ -61,15 +61,16 @@ The row above the input shows, for the current chat: how full the context window
                         v
           Claude (Messages API, streaming, tool use loop)
                         │
-          ┌─────────────┼───────────────┬──────────────┐
-          v             v               v              v
-     read_screen   take_screenshot     bash        save_memory
-     (AX tree)     (ScreenCaptureKit)  (memory dir) (approval)
+          ┌─────────────┼────────────────┬───────────────┐
+          v             v                v               v
+     read_screen   take_screenshot  search_memory   write_memory
+     (AX tree)     (last resort,    (read-only      (.md files in
+                    1 per question)  shell)          memory folder)
 ```
 
 1. On send, D-Shift snapshots the accessibility tree of the frontmost app's focused window and serializes it into compact indented text. The snapshot is only re-sent when it changes.
 2. Each request also carries `me.md` and the list of memory files, so the model knows what it can look up.
-3. Claude streams back text and tool calls. Tools run locally; results go back to Claude until it finishes. Tools that change anything wait for your approval in the chat.
+3. Claude streams back text and tool calls. Tools run locally; results go back to Claude until it finishes. Screen refreshes and memory reads and writes run in the background without a card in the chat. Screenshots show as a card with a thumbnail.
 4. Streaming text is revealed on a 60 fps clock that drains a fraction of the backlog each frame, so output is smooth rather than bursty.
 
 More detail in [docs/architecture.md](docs/architecture.md).
@@ -82,14 +83,14 @@ Memory is a folder of markdown files. Nothing is hidden in a database, so you ca
 ~/Library/Application Support/DShift/
 ├── memory/
 │   ├── me.md          # your profile, sent with every request
-│   ├── notes.md       # quick facts saved by save_memory
+│   ├── notes.md       # small facts the model saves
 │   ├── people/        # one file per person
 │   └── projects/      # one file per project
 └── history/
     └── 2026-10-01.jsonl   # append-only chat log, one file per day
 ```
 
-The model searches memory with the `bash` tool, which runs in the memory folder. Read-only searches inside that folder (`rg`, `grep`, `find`, `cat`, `ls`, and similar, piped together) run immediately. Anything else, such as writing a file, redirecting output, running other programs, or touching paths outside the folder, shows an Allow / Deny card first.
+The model treats memory as its own background knowledge. It searches the folder with read-only shell commands (`rg`, `grep`, `find`, `cat`, `ls`, and similar, piped together) before answering anything personal, and it saves durable facts it learns (people, projects, preferences, writing style) without asking or announcing it. Searches can't write, chain commands, or leave the folder. Writes are limited to `.md` files inside the folder. Open the folder any time to see or edit what it knows.
 
 Your data never lives in the repo by default. To keep it somewhere else, set `DSHIFT_DATA_DIR` in `.env`. If you point it inside the repo, `data/`, `memory/`, and `history/` are already git-ignored.
 
@@ -111,7 +112,8 @@ Model settings live in `Sources/DShift/Chat/ClaudeClient.swift`: the model (`cla
 - Memory and history stay on your Mac.
 - Screen context (the accessibility snapshot, and screenshots when the model takes one) and the memory overview are sent to the Anthropic API with your questions. Don't use D-Shift on screens you aren't comfortable sending.
 - The sidebar excludes itself from screenshots and screen recordings.
-- The Bash tool strips `ANTHROPIC_API_KEY` from the environment of commands it runs.
+- Memory search strips `ANTHROPIC_API_KEY` from the environment of the commands it runs.
+- Because memory is saved automatically, text on your screen could in principle influence what gets saved (prompt injection). Writes are confined to markdown files in the memory folder; review it occasionally.
 
 ## Development
 
@@ -129,7 +131,7 @@ Sources/DShift/
 ├── Chat/      chat model and agent loop, tabs, Claude streaming client, usage
 ├── Context/   accessibility snapshots, active-app tracking
 ├── Memory/    memory folder, chat history log
-├── Tools/     tool protocol and registry, screen tools, bash, memory tools
+├── Tools/     tool protocol and registry, screen tools, memory tools, shell policy
 └── UI/        SwiftUI views
 Tests/DShiftTests/
 docs/

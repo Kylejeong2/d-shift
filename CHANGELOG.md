@@ -4,6 +4,16 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- Memory works in the background: `bash` and `save_memory` are replaced by hidden `search_memory` (read-only shell) and `write_memory` (`.md` files in the memory folder) tools. The model consults and updates memory without asking or announcing it.
+- Screenshots are a last resort: the model only takes one when the accessibility snapshot lacks the information needed, at most one per question.
+- Screen refreshes (`read_screen`) no longer show a card in the chat.
+
+### Fixed
+
+- Commit memory sources that a case-insensitive ignore rule had excluded, which broke CI builds.
+
 ## [0.1.0] - 2026-10-01
 
 ### Added
