@@ -1,0 +1,277 @@
+import AppKit
+
+@MainActor
+final class ChatModel: ObservableObject {
+    private static let maxAgentIterations = 12
+    private static let systemPrompt = """
+    You are a sidebar assistant on the user's Mac. Each user message may include a <screen> block: a snapshot of the \
+    accessibility tree of the app window the user is looking at. Lines are indented by nesting and show role plus \
+    quoted text; "<- FOCUSED" marks the focused element.
+
+    The user's memory is a local folder of markdown files. The <memory> block holds me.md (their profile) and a list \
+    of the other files. Before answering anything that depends on the user's people, projects, or preferences, search \
+    memory with the bash tool, which runs in the memory folder (for example `rg -n -i "acme" .` or \
+    `grep -rni "acme" .`). Read-only searches run immediately; anything else asks the user first.
+
+    Answer questions about what is on screen and help with the task at hand. Ground answers in the snapshot and quote \
+    exact text from it when useful. If the snapshot does not contain what is needed (for example images or canvas \
+    content), say so plainly. Be concise: this is a narrow sidebar, so prefer short paragraphs and lists.
+
+    If the accessibility snapshot is missing what you need (images, charts, canvas or design apps, visual layout), \
+    call take_screenshot.
+
+    When the user shares a lasting fact about themselves, their work, or their preferences, call save_memory with it. \
+    For larger edits (a new file under people/ or projects/), use bash.
+    """
+
+    let id = UUID()
+    @Published private(set) var title = "New chat"
+    @Published private(set) var entries: [TranscriptEntry] = []
+    @Published var input = ""
+    @Published private(set) var isRunning = false
+    @Published private(set) var isAwaitingFirstToken = false
+    @Published private(set) var usage = ChatUsage()
+    @Published var focusRequest = 0
+
+    let tracker: AppTracker
+    let scroll = ScrollSignal()
+
+    private let tools: ToolRegistry
+    private var apiMessages: [JSON] = []
+    private var lastSentContext: ScreenContext?
+    private var runTask: Task<Void, Never>?
+
+    init(tracker: AppTracker) {
+        self.tracker = tracker
+        tools = ToolRegistry(tools: [ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), BashTool(), SaveMemoryTool()])
+    }
+
+    func send() {
+        let question = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty, !isRunning else { return }
+        input = ""
+        if question == "/clear" { return clear() }
+        if entries.isEmpty { title = String(question.prefix(28)) }
+
+        entries.append(.text(TextEntry(role: .user, text: question)))
+        ChatHistory.append(role: "user", text: question, app: tracker.app?.localizedName, chat: id)
+        isRunning = true
+        runTask = Task {
+            await runTurn(question: question)
+            isRunning = false
+            isAwaitingFirstToken = false
+        }
+    }
+
+    func stop() {
+        runTask?.cancel()
+        for case .tool(let call) in entries where call.status == .awaitingApproval {
+            call.resolveApproval(false)
+        }
+    }
+
+    // MARK: - Agent loop
+
+    private func runTurn(question: String) async {
+        let checkpoint = apiMessages.count
+        let context = await captureScreen()
+        apiMessages.append(["role": "user", "content": [["type": "text", "text": userContent(for: question, context: context)]]])
+
+        do {
+            for _ in 0..<Self.maxAgentIterations {
+                let message = try await streamAssistantMessage()
+                apiMessages.append(["role": "assistant", "content": message.blocks])
+                usage.record(message.usage)
+
+                switch message.stopReason {
+                case "tool_use":
+                    apiMessages.append(["role": "user", "content": await runTools(in: message)])
+                case "pause_turn":
+                    continue
+                case "refusal":
+                    return appendNote("Claude declined to answer this request.")
+                case "max_tokens":
+                    return appendNote("Response hit the length limit.")
+                default:
+                    return
+                }
+            }
+            appendNote("Stopped after \(Self.maxAgentIterations) steps.")
+        } catch {
+            // Roll back to before this turn so the transcript never holds a tool_use without its result.
+            apiMessages.removeSubrange(checkpoint...)
+            lastSentContext = nil
+            appendNote(error is CancellationError || Task.isCancelled ? "Stopped." : "**Error:** \(error.localizedDescription)")
+        }
+    }
+
+    private func streamAssistantMessage() async throws -> AssistantMessage {
+        isAwaitingFirstToken = true
+        defer { isAwaitingFirstToken = false }
+
+        var message = AssistantMessage()
+        var textEntries: [Int: TextEntry] = [:]
+        var toolEntries: [Int: ToolCallEntry] = [:]
+        defer { textEntries.values.forEach { $0.flush() } }
+
+        for try await event in ClaudeClient.stream(system: Self.systemPrompt, messages: apiMessages, tools: tools.definitions) {
+            message.apply(event)
+            switch event {
+            case .blockStart(let index, let block):
+                switch block["type"] as? String {
+                case "text":
+                    let entry = TextEntry(role: .assistant, scroll: scroll)
+                    textEntries[index] = entry
+                    entries.append(.text(entry))
+                    isAwaitingFirstToken = false
+                case "tool_use":
+                    let entry = ToolCallEntry(toolUseID: block["id"] as? String ?? "", name: block["name"] as? String ?? "tool")
+                    toolEntries[index] = entry
+                    entries.append(.tool(entry))
+                    isAwaitingFirstToken = false
+                default:
+                    break
+                }
+            case .blockDelta(let index, let delta):
+                if delta["type"] as? String == "text_delta", let text = delta["text"] as? String {
+                    textEntries[index]?.enqueue(text)
+                }
+            case .blockStop(let index):
+                if let entry = toolEntries[index] {
+                    entry.input = message.blocks[index]["input"] as? JSON ?? [:]
+                }
+            case .stopReason, .usage:
+                break
+            }
+        }
+
+        if let reply = textEntries.sorted(by: { $0.key < $1.key }).map({ $0.value }).last {
+            reply.flush()
+            ChatHistory.append(role: "assistant", text: reply.text, app: tracker.app?.localizedName, chat: id)
+        }
+        guard !message.blocks.isEmpty else { throw ClaudeError.stream("Empty response") }
+        message.dropEmptyTextBlocks()
+        return message
+    }
+
+    private func runTools(in message: AssistantMessage) async -> [JSON] {
+        var results: [JSON] = []
+        for block in message.blocks where block["type"] as? String == "tool_use" {
+            let id = block["id"] as? String ?? ""
+            let entry = entries.lazy.compactMap { if case .tool(let call) = $0, call.toolUseID == id { call } else { nil } }.first
+                ?? ToolCallEntry(toolUseID: id, name: block["name"] as? String ?? "tool")
+            let (output, isError) = await execute(block, entry: entry, inputIsValid: !message.invalidToolInputs.contains(id))
+            var content: [JSON] = [["type": "text", "text": output.text]]
+            if let jpeg = output.jpeg {
+                content.append(["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": jpeg.base64EncodedString()]])
+            }
+            results.append(["type": "tool_result", "tool_use_id": id, "content": content, "is_error": isError])
+        }
+        return results
+    }
+
+    private func execute(_ block: JSON, entry: ToolCallEntry, inputIsValid: Bool) async -> (ToolOutput, Bool) {
+        do {
+            guard inputIsValid else { throw ToolError.invalidInput("arguments were not valid JSON") }
+            let tool = try tools.tool(named: entry.name)
+            let input = block["input"] as? JSON ?? [:]
+            try tools.validate(input, for: tool)
+
+            if tool.requiresApproval(for: input), !(await entry.requestApproval()) {
+                entry.status = .denied
+                return (ToolOutput(text: "The user declined this action."), true)
+            }
+            entry.status = .running
+            let output = try await tool.run(input)
+            entry.output = output.text
+            entry.image = output.jpeg.flatMap(NSImage.init(data:))
+            entry.status = .succeeded
+            scroll.tick += 1
+            return (output, false)
+        } catch {
+            entry.output = error.localizedDescription
+            entry.status = .failed
+            scroll.tick += 1
+            return (ToolOutput(text: error.localizedDescription), true)
+        }
+    }
+
+    // MARK: - Context
+
+    private func captureScreen() async -> ScreenContext? {
+        guard let app = tracker.app else { return nil }
+        return await Task.detached { AXSnapshot.capture(app: app) }.value
+    }
+
+    /// Only resends the screen snapshot when it changed, so follow-up questions stay cheap and cacheable.
+    private func userContent(for question: String, context: ScreenContext?) -> String {
+        var parts: [String] = []
+        if let context, context != lastSentContext {
+            parts.append("<screen app=\"\(context.appName)\" window=\"\(context.windowTitle)\">\n\(context.tree)\n</screen>")
+            lastSentContext = context
+        }
+        parts.append("<memory>\n\(Memory.overview())\n</memory>")
+        parts.append(question)
+        return parts.joined(separator: "\n\n")
+    }
+
+    private func appendNote(_ text: String) {
+        entries.append(.text(TextEntry(role: .assistant, text: "_\(text)_")))
+    }
+
+    private func clear() {
+        stop()
+        entries = []
+        apiMessages = []
+        lastSentContext = nil
+        usage = ChatUsage()
+    }
+}
+
+/// Accumulates streamed content blocks verbatim, including thinking signatures, so they can be sent back unchanged.
+private struct AssistantMessage {
+    private(set) var blocks: [JSON] = []
+    private(set) var stopReason = "end_turn"
+    private(set) var usage = TokenUsage()
+    private(set) var invalidToolInputs: Set<String> = []
+    private var partialInputs: [Int: String] = [:]
+
+    mutating func apply(_ event: StreamEvent) {
+        switch event {
+        case .blockStart(let index, let block):
+            while blocks.count <= index { blocks.append([:]) }
+            blocks[index] = block
+        case .blockDelta(let index, let delta):
+            guard blocks.indices.contains(index) else { return }
+            switch delta["type"] as? String {
+            case "text_delta": append(delta["text"], to: "text", at: index)
+            case "thinking_delta": append(delta["thinking"], to: "thinking", at: index)
+            case "signature_delta": append(delta["signature"], to: "signature", at: index)
+            case "input_json_delta": partialInputs[index, default: ""] += delta["partial_json"] as? String ?? ""
+            default: break
+            }
+        case .blockStop(let index):
+            guard let raw = partialInputs.removeValue(forKey: index), blocks.indices.contains(index) else { return }
+            if raw.isEmpty { return }
+            if let input = (try? JSONSerialization.jsonObject(with: Data(raw.utf8))) as? JSON {
+                blocks[index]["input"] = input
+            } else {
+                blocks[index]["input"] = JSON()
+                invalidToolInputs.insert(blocks[index]["id"] as? String ?? "")
+            }
+        case .stopReason(let reason):
+            stopReason = reason
+        case .usage(let fields):
+            usage.merge(fields)
+        }
+    }
+
+    /// The API rejects empty text blocks when they are sent back in history.
+    mutating func dropEmptyTextBlocks() {
+        blocks.removeAll { $0["type"] as? String == "text" && ($0["text"] as? String ?? "").isEmpty }
+    }
+
+    private mutating func append(_ value: Any?, to key: String, at index: Int) {
+        blocks[index][key] = (blocks[index][key] as? String ?? "") + (value as? String ?? "")
+    }
+}
