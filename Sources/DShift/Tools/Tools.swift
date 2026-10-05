@@ -19,23 +19,31 @@ protocol Tool {
     /// Caps how often the model may call this tool while answering one question.
     var maxCallsPerTurn: Int? { get }
     func run(_ input: JSON) async throws -> ToolOutput
+    /// Long-running tools can report progress, shown live on their card. Defaults to `run(_:)`.
+    func run(_ input: JSON, progress: @escaping (String) -> Void) async throws -> ToolOutput
 }
 
 extension Tool {
     var isHidden: Bool { false }
     var maxCallsPerTurn: Int? { nil }
+
+    func run(_ input: JSON, progress: @escaping (String) -> Void) async throws -> ToolOutput {
+        try await run(input)
+    }
 }
 
 enum ToolError: LocalizedError {
     case unknownTool(String)
     case invalidInput(String)
     case limitReached(String, Int)
+    case failed(String)
 
     var errorDescription: String? {
         switch self {
         case .unknownTool(let name): "Unknown tool: \(name)"
         case .invalidInput(let reason): "Invalid input: \(reason)"
         case .limitReached(let name, let limit): "\(name) can only be called \(limit) time(s) per question. Answer with what you have."
+        case .failed(let reason): reason
         }
     }
 }

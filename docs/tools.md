@@ -10,8 +10,21 @@ Tools are local functions Claude can call during a chat. Visible tools show up i
 | `take_screenshot` | Captures the focused window (`scope: "window"`, default) or the whole display (`scope: "screen"`), downscaled to at most 1568 px on the long edge, JPEG | Yes, with thumbnail | 1 per question, last resort; needs Screen Recording permission |
 | `search_memory` | Read-only shell search in the memory folder | No | `ShellPolicy` ([memory.md](memory.md)) |
 | `write_memory` | Creates, appends to, or replaces a `.md` file in the memory folder | No | Paths confined by `MemoryPath` |
+| `use_computer` | Hands a task to Codex, which operates your apps in the background with its computer-use agent | Yes, with live progress | Always asks for approval; 3 per question; 10 minute timeout |
 
-None of the built-in tools currently need approval. The approval flow (Allow / Deny card) remains available for new tools.
+## Computer use through Codex
+
+`use_computer` is available when the [Codex CLI](https://developers.openai.com/codex) is installed with Computer Use enabled and signed in. D-Shift looks for it at `DSHIFT_CODEX_PATH`, then the CLI bundled in ChatGPT.app, then common install locations. If none is found, the tool isn't offered.
+
+Claude writes one complete, self-contained task, because Codex can't see the conversation. After you click Allow, D-Shift runs:
+
+```
+codex exec --json --ephemeral --skip-git-repo-check --sandbox read-only -C <data dir>/codex "<task>"
+```
+
+Codex's own model chooses the actions and drives your apps through its computer-use service, which works in the background without taking over the app you're using. The read-only sandbox stops Codex from running shell commands that change files. D-Shift parses the JSON event stream to show progress on the card, and returns Codex's final message to Claude. Stop terminates the process. Codex's stderr from the last run is kept at `<data dir>/codex/last-run-stderr.log` for debugging.
+
+Usage counts against your Codex or ChatGPT plan, not your Anthropic key.
 
 ## Adding a tool
 

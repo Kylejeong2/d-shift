@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `use_computer` tool: hands a task to Codex (`codex exec`), which operates your apps in the background with its computer-use agent. Every task needs approval, shows live progress, and returns Codex's summary. Offered only when the Codex CLI is installed.
+
 ## [0.2.0] - 2026-10-02
 
 ### Added

@@ -18,5 +18,6 @@ Especially interesting:
 ## Known limitations
 
 - Screen context and memory overviews are sent to the Anthropic API by design. See the Privacy section of the README.
+- `use_computer` lets Codex operate any app. It always asks for approval and shows the full task; read it before clicking Allow, especially if the request came from content on your screen.
 - Memory is written automatically, so on-screen content could influence what gets saved (memory poisoning). Writes are confined to markdown in the memory folder.
 - Release builds are ad-hoc signed, not notarized. Download them only from this repository's Releases page.

@@ -409,6 +409,13 @@ private struct ToolCallRow: View {
             }
             .buttonStyle(.plain)
 
+            if entry.status == .running, let latest = entry.output.split(separator: "\n").last {
+                Text(latest)
+                    .scaledFont(11)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .transition(.opacity)
+            }
             if let image = entry.image {
                 Image(nsImage: image)
                     .resizable()

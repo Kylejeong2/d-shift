@@ -16,6 +16,12 @@ final class ChatModel: ObservableObject {
     or styling, or a snapshot that is empty or clearly missing the content the user is asking about. Never take one \
     to double-check text you can already read. If read_screen can refresh stale text, prefer it.
 
+    Acting on the computer: when the user asks you to do something in their apps (send a message, fill in a form, \
+    navigate somewhere, organize files) and use_computer is available, call it with one complete, self-contained \
+    task. It runs in the background through Codex, which can't see this conversation, so include every detail it \
+    needs: app names, exact text, recipients, and when to stop. The user approves each task first. Never use it just \
+    to look at the screen, and report its result plainly, including anything it couldn't do.
+
     Memory: you have a persistent memory of the user, a folder of markdown files. The <memory> block holds me.md \
     (their profile) and the list of files. Treat it as your own background knowledge:
     - Before answering anything that may depend on the user's people, projects, preferences, or history, search it \
@@ -53,7 +59,11 @@ final class ChatModel: ObservableObject {
 
     init(tracker: AppTracker) {
         self.tracker = tracker
-        tools = ToolRegistry(tools: [ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), MemorySearchTool(), MemoryWriteTool()])
+        var available: [Tool] = [ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), MemorySearchTool(), MemoryWriteTool()]
+        if let codexPath = ComputerUseTool.locateCodex() {
+            available.append(ComputerUseTool(codexPath: codexPath))
+        }
+        tools = ToolRegistry(tools: available)
     }
 
     /// Return: sends now when idle, otherwise queues behind the running turn.
@@ -275,7 +285,10 @@ final class ChatModel: ObservableObject {
                 return (ToolOutput(text: "The user declined this action."), true)
             }
             entry.status = .running
-            let output = try await tool.run(input)
+            let output = try await tool.run(input) { [weak self] progress in
+                entry.output = progress
+                self?.scroll.tick += 1
+            }
             entry.output = output.text
             entry.image = output.jpeg.flatMap(NSImage.init(data:))
             entry.status = .succeeded

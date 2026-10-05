@@ -5,6 +5,7 @@ A screen-aware AI sidebar for macOS. Double-tap **Shift** anywhere, ask a questi
 - **Sees your screen without screenshots by default.** It reads the macOS accessibility tree of the window you're looking at, which is exact and cheap. Only when that isn't enough (images, charts, design apps) does the model take a screenshot, at most one per question.
 - **Remembers you, locally.** Memory is a plain folder of markdown files on your Mac. The model searches it with `grep`/`rg` and saves what it learns about you in the background, without cluttering the chat.
 - **Stays out of the way.** A translucent, non-activating panel that floats over every app and Space, never steals focus from the app you're asking about, and is hidden from screen recordings.
+- **Acts in your apps, in the background (optional).** If you have Codex with Computer Use, D-Shift can hand it tasks like "reply to Sam in Messages". Codex operates the app in the background while you keep working, and you approve every task first.
 - **Multiple chats.** Tabs, each with its own conversation and model session, plus live token, context-window, cache, and cost stats per chat.
 
 > Status: early (v0.x). macOS only. Expect rough edges and breaking changes.
@@ -117,6 +118,7 @@ Settings are read from the environment first, then `./.env`, then `~/.config/dsh
 |---|---|---|
 | `ANTHROPIC_API_KEY` | none (required) | API key. The app asks for it on first use if it isn't set elsewhere. Change it from the menu bar icon > Change API Key. |
 | `DSHIFT_DATA_DIR` | `~/Library/Application Support/DShift` | Memory and chat history location |
+| `DSHIFT_CODEX_PATH` | auto-detected | Path to the `codex` CLI, for computer use ([docs/tools.md](docs/tools.md)) |
 
 Model settings live in `Sources/DShift/Chat/ClaudeClient.swift`: the model (`claude-opus-5-5`) and effort (`low`, for fast sidebar answers).
 
@@ -125,6 +127,7 @@ Model settings live in `Sources/DShift/Chat/ClaudeClient.swift`: the model (`cla
 - Memory and history stay on your Mac.
 - Screen context (the accessibility snapshot, and screenshots when the model takes one) and the memory overview are sent to the Anthropic API with your questions. Don't use D-Shift on screens you aren't comfortable sending.
 - The sidebar excludes itself from screenshots and screen recordings.
+- Computer-use tasks are sent to Codex (OpenAI) along with whatever Codex sees in the apps it operates. Each task needs your approval.
 - Memory search strips `ANTHROPIC_API_KEY` from the environment of the commands it runs.
 - Because memory is saved automatically, text on your screen could in principle influence what gets saved (prompt injection). Writes are confined to markdown files in the memory folder; review it occasionally.
 
