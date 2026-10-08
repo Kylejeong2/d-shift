@@ -25,9 +25,16 @@ final class ResizeHandle: NSView {
 
     override var mouseDownCanMoveWindow: Bool { false }
 
-    // macOS passes clicks on fully transparent pixels to the window behind. A fill too faint to see keeps the
-    // corner handles clickable where they extend past the panel's rounded corners.
+    /// Radius of the panel's rounded corners. The fill is clipped to it.
+    var cornerRadius: CGFloat = 0
+
+    // macOS passes clicks on fully transparent pixels to the window behind, so a fill too faint to see keeps the
+    // handles clickable. It stays inside the rounded panel shape: any pixel past it, even at 1% alpha, makes the
+    // window shadow and screenshots show square corners.
     override func draw(_ dirtyRect: NSRect) {
+        if let panelBounds = superview?.bounds {
+            NSBezierPath(roundedRect: convert(panelBounds, from: superview), xRadius: cornerRadius, yRadius: cornerRadius).addClip()
+        }
         NSColor(white: 0, alpha: 0.01).setFill()
         dirtyRect.fill()
     }

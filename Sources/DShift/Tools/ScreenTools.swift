@@ -58,7 +58,9 @@ struct ScreenshotTool: Tool {
         } else {
             let display = content.displays.first { $0.frame.contains(window?.frame.origin ?? .zero) } ?? content.displays.first
             guard let display else { return ToolOutput(text: "No display found.") }
-            filter = SCContentFilter(display: display, excludingWindows: [])
+            // The sidebar shows up in user screenshots, but Claude's own screenshots leave it out.
+            let ownWindows = content.windows.filter { $0.owningApplication?.processID == getpid() }
+            filter = SCContentFilter(display: display, excludingWindows: ownWindows)
             frame = display.frame
             description = "Full screen"
         }

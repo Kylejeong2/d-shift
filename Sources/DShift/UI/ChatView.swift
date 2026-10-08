@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Shared surface tokens: one radius for bubbles, cards, and the input; a smaller one for tabs and nested media.
-private enum Theme {
+enum Theme {
     static let surfaceShape = RoundedRectangle(cornerRadius: 12, style: .continuous)
     static let innerShape = RoundedRectangle(cornerRadius: 8, style: .continuous)
     static let surfaceFill = Color.black.opacity(0.4)
@@ -107,11 +107,13 @@ private struct TabStrip: View {
                             onClose: { store.close(chat.id) }
                         )
                     }
+                    IconButton(systemName: "plus", help: "New chat (Cmd+T)", action: store.newChat)
+                        .keyboardShortcut("t", modifiers: .command)
                 }
             }
-            IconButton(systemName: "plus", help: "New chat", action: store.newChat)
-                .keyboardShortcut("t", modifiers: .command)
             ShortcutKey("w", action: { store.close(store.selectedID) })
+            HistoryButton(store: store)
+            FeedbackButton(store: store)
             IconButton(systemName: "xmark", help: "Hide sidebar", action: onClose)
         }
         .padding(.horizontal, 10)
@@ -157,7 +159,7 @@ private struct TabButton: View {
     }
 }
 
-private struct IconButton: View {
+struct IconButton: View {
     let systemName: String
     let help: String
     let action: () -> Void
@@ -219,15 +221,20 @@ private struct TranscriptView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         if model.entries.isEmpty {
                             EmptyState()
+                                .transition(.identity)
                         }
-                        ForEach(model.entries) { entry in
-                            switch entry {
-                            case .text(let text): TextRow(entry: text)
-                            case .tool(let call): ToolCallRow(entry: call)
+                        ForEach(TranscriptItem.group(model.entries)) { item in
+                            Group {
+                                switch item {
+                                case .text(let text): TextRow(entry: text)
+                                case .tools(let calls): ToolGroup(calls: calls)
+                                case .task(let call): TaskRow(entry: call)
+                                }
                             }
+                            .transition(.fadeUp)
                         }
-                        if model.isRunning && !model.isStreamingText {
-                            ThinkingRow()
+                        if model.isRunning && !model.isStreamingText && !model.isToolActive, let startedAt = model.turnStartedAt {
+                            ThinkingRow(startedAt: startedAt)
                         }
                         Color.clear
                             .frame(height: 1)
@@ -237,6 +244,8 @@ private struct TranscriptView: View {
                             })
                     }
                     .padding(14)
+                    .animation(.fadeUp, value: model.entries.count)
+                    .animation(.fadeUp, value: model.isRunning)
                 }
                 .coordinateSpace(name: scrollSpace)
                 .defaultScrollAnchor(.bottom)
@@ -324,7 +333,7 @@ private struct EmptyState: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Ask about what's on your screen.")
-            Text("It remembers what you tell it about yourself. /clear resets the chat.")
+            Text("Tap Ctrl+Shift anywhere to attach the window you're on. /clear resets the chat.")
                 .scaledFont(11)
                 .foregroundStyle(.secondary)
         }
@@ -333,15 +342,79 @@ private struct EmptyState: View {
     }
 }
 
+/// Port of Beautiful UI's loading state (beautifului.dev): a 3x3 pixel grid, shimmering label, and elapsed time.
 private struct ThinkingRow: View {
+    let startedAt: Date
+
     var body: some View {
-        HStack(spacing: 6) {
-            ProgressView().controlSize(.mini)
-            Text("Thinking")
-                .scaledFont(12)
-                .foregroundStyle(.secondary)
+        TimelineView(.animation) { timeline in
+            let now = timeline.date
+            HStack(spacing: 10) {
+                PixelGrid(time: now.timeIntervalSinceReferenceDate)
+                ShimmerText(text: "Thinking", time: now.timeIntervalSinceReferenceDate)
+                Text(String(format: "%.1fs", now.timeIntervalSince(startedAt)))
+                    .scaledFont(12, design: .monospaced)
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
+            }
         }
         .transition(.opacity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Thinking")
+    }
+}
+
+struct PixelGrid: View {
+    private static let period = 0.65
+    /// Per-pixel delays in seconds, row by row, matching the reference's diagonal sweep.
+    private static let delays = [0.09, 0.18, 0.27, 0, 0.09, 0.18, 0.09, 0.18, 0.27]
+    private static let restingOpacity = 0.15
+
+    let time: TimeInterval
+
+    var body: some View {
+        Grid(horizontalSpacing: 1.5, verticalSpacing: 1.5) {
+            ForEach(0..<3, id: \.self) { row in
+                GridRow {
+                    ForEach(0..<3, id: \.self) { column in
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(.primary)
+                            .frame(width: 4, height: 4)
+                            .opacity(opacity(delay: Self.delays[row * 3 + column]))
+                    }
+                }
+            }
+        }
+    }
+
+    private func opacity(delay: Double) -> Double {
+        let phase = ((time - delay) / Self.period).truncatingRemainder(dividingBy: 1)
+        let pulse = (1 - cos(phase * 2 * .pi)) / 2
+        return Self.restingOpacity + (1 - Self.restingOpacity) * pulse
+    }
+}
+
+struct ShimmerText: View {
+    private static let period = 1.4
+
+    let text: String
+    let time: TimeInterval
+
+    var body: some View {
+        let phase = (time / Self.period).truncatingRemainder(dividingBy: 1)
+        Text(text)
+            .scaledFont(13, weight: .medium)
+            .foregroundStyle(
+                LinearGradient(
+                    stops: [
+                        .init(color: .white.opacity(0.4), location: 0.35),
+                        .init(color: .white, location: 0.5),
+                        .init(color: .white.opacity(0.4), location: 0.65),
+                    ],
+                    startPoint: UnitPoint(x: 1.5 - phase * 2, y: 0.5),
+                    endPoint: UnitPoint(x: 2.5 - phase * 2, y: 0.5)
+                )
+            )
     }
 }
 
@@ -351,148 +424,63 @@ private struct TextRow: View {
     var body: some View {
         switch entry.role {
         case .user:
-            HStack {
-                Spacer(minLength: 40)
-                Text(entry.text)
-                    .scaledFont(13)
-                    .foregroundStyle(.white)
+            VStack(alignment: .trailing, spacing: 6) {
+                if !entry.attachments.isEmpty {
+                    AttachmentThumbnails(attachments: entry.attachments, size: 72)
+                }
+                if !entry.text.isEmpty {
+                    Text(entry.text)
+                        .scaledFont(13)
+                        .foregroundStyle(.white)
+                        .textSelection(.enabled)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(Self.userBubble, in: Theme.surfaceShape)
+                }
+            }
+            .padding(.leading, 40)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        case .assistant:
+            VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 8) {
+                    let segments = MessageSegment.split(entry.text)
+                    ForEach(Array(segments.enumerated()), id: \.offset) { index, segment in
+                        let isLast = index == segments.count - 1
+                        switch segment {
+                        case .prose(let text):
+                            (Text(Self.markdown(text)) + Text(entry.isStreaming && isLast ? " ▍" : "").foregroundColor(.secondary))
+                                .scaledFont(13)
+                                .lineSpacing(2)
+                        case .code(let code):
+                            CodeBlock(code: code)
+                        }
+                    }
+                }
                     .textSelection(.enabled)
                     .padding(.horizontal, 11)
-                    .padding(.vertical, 7)
-                    .background(Self.userBubble, in: Theme.surfaceShape)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.surfaceFill, in: Theme.surfaceShape)
+                    .overlay(Theme.surfaceShape.strokeBorder(Theme.stroke))
+                if !entry.isStreaming, !entry.text.isEmpty, !entry.text.hasPrefix("_") {
+                    MessageActions(text: entry.text)
+                        .transition(.opacity)
+                }
             }
-        case .assistant:
-            Text(rendered)
-                .scaledFont(13)
-                .lineSpacing(2)
-                .textSelection(.enabled)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Theme.surfaceFill, in: Theme.surfaceShape)
-                .overlay(Theme.surfaceShape.strokeBorder(Theme.stroke))
+            .animation(.easeOut(duration: 0.4), value: entry.isStreaming)
         }
     }
 
     private static let userBubble = Color(red: 0.0, green: 0.36, blue: 0.82).opacity(0.92)
 
-    private var rendered: AttributedString {
+    private var rendered: AttributedString { Self.markdown(entry.text) }
+
+    private static func markdown(_ text: String) -> AttributedString {
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        return (try? AttributedString(markdown: entry.text, options: options)) ?? AttributedString(entry.text)
+        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 }
 
-private struct ToolCallRow: View {
-    @ObservedObject var entry: ToolCallEntry
-    @State private var isExpanded = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button { isExpanded.toggle() } label: {
-                HStack(spacing: 6) {
-                    ToolStatusIcon(status: entry.status)
-                    Text(entry.name)
-                        .scaledFont(12, weight: .medium, design: .monospaced)
-                    if !isExpanded, !entry.inputSummary.isEmpty {
-                        Text(entry.inputSummary)
-                            .scaledFont(11, design: .monospaced)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .scaledFont(9, weight: .semibold)
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if entry.status == .running, let latest = entry.output.split(separator: "\n").last {
-                Text(latest)
-                    .scaledFont(11)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .transition(.opacity)
-            }
-            if let image = entry.image {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: isExpanded ? 400 : 120)
-                    .clipShape(Theme.innerShape)
-            }
-            if isExpanded {
-                ToolDetail(label: "Input", text: entry.inputSummary)
-                ToolDetail(label: "Output", text: entry.output)
-            }
-            if entry.status == .awaitingApproval {
-                ApprovalButtons(entry: entry)
-            }
-        }
-        .padding(10)
-        .background(Theme.surfaceFill, in: Theme.surfaceShape)
-        .overlay(Theme.surfaceShape.strokeBorder(Theme.stroke))
-        .animation(.easeOut(duration: 0.15), value: isExpanded)
-    }
-}
-
-private struct ToolStatusIcon: View {
-    let status: ToolCallEntry.Status
-
-    var body: some View {
-        Group {
-            switch status {
-            case .preparing, .running:
-                ProgressView().controlSize(.mini)
-            case .awaitingApproval:
-                Image(systemName: "hand.raised.fill").foregroundStyle(.orange)
-            case .succeeded:
-                Image(systemName: "checkmark").foregroundStyle(.green)
-            case .failed:
-                Image(systemName: "xmark").foregroundStyle(.red)
-            case .denied:
-                Image(systemName: "nosign").foregroundStyle(.secondary)
-            }
-        }
-        .scaledFont(10, weight: .bold)
-        .frame(width: 14, height: 14)
-    }
-}
-
-private struct ToolDetail: View {
-    let label: String
-    let text: String
-
-    var body: some View {
-        if !text.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .scaledFont(10, weight: .semibold)
-                    .foregroundStyle(.secondary)
-                Text(text.prefix(2000))
-                    .scaledFont(11, design: .monospaced)
-                    .lineLimit(14)
-                    .textSelection(.enabled)
-            }
-        }
-    }
-}
-
-private struct ApprovalButtons: View {
-    let entry: ToolCallEntry
-
-    var body: some View {
-        HStack {
-            Spacer()
-            Button("Deny") { entry.resolveApproval(false) }
-            Button("Allow") { entry.resolveApproval(true) }
-                .buttonStyle(.borderedProminent)
-        }
-        .controlSize(.small)
-    }
-}
 
 private struct QueueView: View {
     @ObservedObject var model: ChatModel
@@ -549,7 +537,41 @@ private struct InputBar: View {
     @ObservedObject var model: ChatModel
     @FocusState private var isFocused: Bool
 
+    @State private var highlighted = 0
+
+    private var commandMatches: [SlashCommand] { SlashCommand.matches(for: model.input) }
+
     var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if !commandMatches.isEmpty {
+                CommandMenu(commands: commandMatches, highlighted: min(highlighted, commandMatches.count - 1)) { command in
+                    model.input = command.name
+                    submit()
+                }
+                .transition(.fadeUp)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                if !model.attachments.isEmpty {
+                    AttachmentThumbnails(attachments: model.attachments, size: 48, onRemove: model.removeAttachment)
+                }
+                field
+            }
+            .padding(10)
+            .background(Theme.surfaceFill, in: Theme.surfaceShape)
+            .overlay(Theme.surfaceShape.strokeBorder(isDropTargeted ? Color.accentColor : AutoMode.isOn ? Color.orange.opacity(0.5) : Theme.stroke))
+            AutoModeHint(model: model)
+        }
+        .animation(.fadeUp, value: commandMatches)
+        .onChange(of: model.input) { highlighted = 0 }
+        .padding(12)
+        .onDrop(of: [.image, .fileURL], isTargeted: $isDropTargeted, perform: attachDropped)
+        .onChange(of: model.focusRequest) { isFocused = true }
+        .onAppear { isFocused = true }
+    }
+
+    @State private var isDropTargeted = false
+
+    private var field: some View {
         HStack(spacing: 8) {
             TextField(model.isRunning ? "Queue a message, or Cmd+Return to send now" : "Ask about your screen...", text: $model.input, axis: .vertical)
                 .textFieldStyle(.plain)
@@ -561,22 +583,332 @@ private struct InputBar: View {
                     model.sendNow()
                     return .handled
                 }
-                .onSubmit(model.send)
+                .onKeyPress(.downArrow) { moveHighlight(1) }
+                .onKeyPress(.upArrow) { moveHighlight(-1) }
+                // Shift+Tab can arrive as backtab (U+0019) rather than Tab with Shift.
+                .onKeyPress(KeyEquivalent("\u{19}"), phases: .down) { _ in
+                    model.toggleAutoMode()
+                    return .handled
+                }
+                .onKeyPress(.tab, phases: .down) { press in
+                    if press.modifiers.contains(.shift) {
+                        model.toggleAutoMode()
+                        return .handled
+                    }
+                    guard let command = highlightedCommand else { return .ignored }
+                    model.input = command.name
+                    return .handled
+                }
+                .onSubmit(submit)
             // Backup for Cmd+Return in case the field consumes the key press first; a second call finds empty input.
             ShortcutKey(.return, action: model.sendNow)
-            if model.isRunning {
-                Button(action: model.stop) {
-                    Image(systemName: "stop.circle.fill")
-                }
-                .buttonStyle(.plain)
-                .help("Stop")
+            ShortcutKey("v", action: pasteImageOrText)
+            IconButton(systemName: "camera", help: "Appshot: attach the current window (Ctrl+Shift)") {
+                Task { await model.attachWindowScreenshot() }
+            }
+            IconButton(systemName: "photo", help: "Attach an image (or paste / drop one)", action: pickImages)
+            SendControls(model: model)
+        }
+    }
+
+    private var highlightedCommand: SlashCommand? {
+        let matches = commandMatches
+        return matches.isEmpty ? nil : matches[min(highlighted, matches.count - 1)]
+    }
+
+    private func moveHighlight(_ step: Int) -> KeyPress.Result {
+        let count = commandMatches.count
+        guard count > 0 else { return .ignored }
+        highlighted = (min(highlighted, count - 1) + step + count) % count
+        return .handled
+    }
+
+    /// Return with the command menu open runs the highlighted command, like Claude Code.
+    private func submit() {
+        if let command = highlightedCommand, SlashCommand.exact(model.input) == nil {
+            model.input = command.name
+        }
+        model.send()
+    }
+
+    /// Cmd+V attaches a copied image; anything with text pastes into the field as usual.
+    private func pasteImageOrText() {
+        let pasteboard = NSPasteboard.general
+        if pasteboard.string(forType: .string) == nil, let image = NSImage(pasteboard: pasteboard) {
+            model.attach(image)
+        } else {
+            NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil)
+        }
+    }
+
+    private func pickImages() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = true
+        guard panel.runModal() == .OK else { return }
+        for url in panel.urls {
+            if let image = NSImage(contentsOf: url) { model.attach(image) }
+        }
+    }
+
+    private func attachDropped(_ providers: [NSItemProvider]) -> Bool {
+        for provider in providers where provider.canLoadObject(ofClass: NSImage.self) {
+            _ = provider.loadObject(ofClass: NSImage.self) { image, _ in
+                guard let image = image as? NSImage else { return }
+                Task { @MainActor in model.attach(image) }
             }
         }
-        .padding(10)
+        return true
+    }
+}
+
+/// Idle: send. Running: queue the draft behind the current reply (Return), send it now and interrupt
+/// (Cmd+Return), or stop.
+/// A reply split on ``` fences, so code and ASCII art render monospaced instead of wrapping in prose.
+enum MessageSegment: Equatable {
+    case prose(String)
+    case code(String)
+
+    static func split(_ text: String) -> [MessageSegment] {
+        var segments: [MessageSegment] = []
+        for (index, part) in text.components(separatedBy: "```").enumerated() {
+            if index.isMultiple(of: 2) {
+                let prose = part.trimmingCharacters(in: .newlines)
+                if !prose.isEmpty { segments.append(.prose(prose)) }
+            } else {
+                // Drop the language tag on the opening fence line ("```swift").
+                var lines = part.components(separatedBy: "\n")
+                if let first = lines.first, !first.contains(" ") { lines.removeFirst() }
+                segments.append(.code(lines.joined(separator: "\n").trimmingCharacters(in: .newlines)))
+            }
+        }
+        return segments
+    }
+}
+
+private struct CodeBlock: View {
+    let code: String
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            Text(code)
+                .scaledFont(11.5, design: .monospaced)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(10)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.black.opacity(0.3), in: Theme.innerShape)
+    }
+}
+
+private struct CommandMenu: View {
+    let commands: [SlashCommand]
+    let highlighted: Int
+    let onChoose: (SlashCommand) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            ForEach(Array(commands.enumerated()), id: \.element) { index, command in
+                Button { onChoose(command) } label: {
+                    HStack(spacing: 10) {
+                        Text(command.name)
+                            .scaledFont(12, weight: .semibold, design: .monospaced)
+                            .frame(width: 80, alignment: .leading)
+                        Text(command.summary)
+                            .scaledFont(12)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.white.opacity(index == highlighted ? 0.1 : 0), in: Theme.innerShape)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
         .background(Theme.surfaceFill, in: Theme.surfaceShape)
         .overlay(Theme.surfaceShape.strokeBorder(Theme.stroke))
-        .padding(12)
-        .onChange(of: model.focusRequest) { isFocused = true }
-        .onAppear { isFocused = true }
+    }
+}
+
+/// Claude Code-style mode line under the input.
+private struct AutoModeHint: View {
+    @ObservedObject var model: ChatModel
+
+    var body: some View {
+        let isOn = AutoMode.isOn
+        Button(action: model.toggleAutoMode) {
+            HStack(spacing: 4) {
+                Image(systemName: isOn ? "forward.fill" : "hand.raised")
+                    .scaledFont(9)
+                Text(isOn ? "auto mode on" : "asks before computer use")
+                Text("(shift+tab to cycle)").foregroundStyle(.tertiary)
+            }
+            .scaledFont(11)
+            .foregroundStyle(isOn ? Color.orange : .secondary)
+            .padding(.horizontal, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .id(model.autoModeChanged)
+        .help(isOn ? "Computer use runs without asking. Click or /auto to turn off." : "Click or /auto to always allow computer use.")
+    }
+}
+
+private struct SendControls: View {
+    @ObservedObject var model: ChatModel
+
+    private var hasDraft: Bool {
+        !model.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !model.attachments.isEmpty
+    }
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if model.isRunning {
+                if hasDraft {
+                    pill("Queue", systemName: "text.append", help: "Send after the current reply (Return)", action: model.send)
+                    pill("Send now", systemName: "bolt.fill", help: "Interrupt and send this now (Cmd+Return)", action: model.sendNow)
+                }
+                round("stop.fill", help: "Stop", tint: .white.opacity(0.18), action: model.stop)
+            } else {
+                round("arrow.up", help: "Send (Return)", tint: hasDraft ? .accentColor : .white.opacity(0.12), action: model.send)
+                    .disabled(!hasDraft)
+            }
+        }
+        .animation(.fadeUp, value: model.isRunning)
+        .animation(.fadeUp, value: hasDraft)
+    }
+
+    private func pill(_ label: String, systemName: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(label, systemImage: systemName)
+                .scaledFont(11, weight: .medium)
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .background(.white.opacity(0.1), in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .transition(.scale(scale: 0.85).combined(with: .opacity))
+    }
+
+    private func round(_ systemName: String, help: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .scaledFont(10, weight: .bold)
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(tint, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+}
+
+private struct AttachmentThumbnails: View {
+    let attachments: [Attachment]
+    let size: CGFloat
+    var onRemove: ((UUID) -> Void)? = nil
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(attachments) { attachment in
+                    AttachmentChip(attachment: attachment, size: size, onRemove: onRemove.map { remove in { remove(attachment.id) } })
+                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                }
+            }
+            .animation(.fadeUp, value: attachments.map(\.id))
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Codex-style appshot chip: thumbnail with the app icon badge, plus app name and window title.
+/// Plain images (pasted, dropped, picked) show as a bare thumbnail. Click to preview.
+private struct AttachmentChip: View {
+    let attachment: Attachment
+    let size: CGFloat
+    let onRemove: (() -> Void)?
+
+    @State private var isHovering = false
+    @State private var isPreviewing = false
+
+    var body: some View {
+        content
+            .overlay(alignment: .topTrailing) {
+                if let onRemove, isHovering {
+                    Button(action: onRemove) {
+                        Image(systemName: "xmark.circle.fill")
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .black.opacity(0.75))
+                            .scaledFont(13)
+                    }
+                    .buttonStyle(.plain)
+                    .offset(x: 5, y: -5)
+                    .help("Remove")
+                    .transition(.opacity)
+                }
+            }
+            .onHover { hovering in withAnimation(.easeOut(duration: 0.12)) { isHovering = hovering } }
+            .onTapGesture { isPreviewing = true }
+            .popover(isPresented: $isPreviewing) {
+                Image(nsImage: attachment.image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 520, maxHeight: 420)
+                    .padding(8)
+            }
+            .help(attachment.source.map { "\($0.appName) \($0.windowTitle)" } ?? "Image")
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let source = attachment.source {
+            HStack(spacing: 8) {
+                thumbnail(side: 34)
+                    .overlay(alignment: .bottomTrailing) {
+                        if let icon = source.icon {
+                            Image(nsImage: icon)
+                                .resizable()
+                                .frame(width: 16, height: 16)
+                                .offset(x: 4, y: 4)
+                        }
+                    }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(source.appName)
+                        .scaledFont(12, weight: .medium)
+                        .lineLimit(1)
+                    if !source.windowTitle.isEmpty {
+                        Text(source.windowTitle)
+                            .scaledFont(11)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: 150, alignment: .leading)
+            }
+            .padding(.leading, 5)
+            .padding(.trailing, 10)
+            .padding(.vertical, 5)
+            .background(Theme.surfaceFill, in: Theme.innerShape)
+            .overlay(Theme.innerShape.strokeBorder(Theme.stroke))
+        } else {
+            thumbnail(side: size)
+        }
+    }
+
+    private func thumbnail(side: CGFloat) -> some View {
+        Image(nsImage: attachment.image)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: side, height: side)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Theme.stroke))
     }
 }
