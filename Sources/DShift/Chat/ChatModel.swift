@@ -4,12 +4,14 @@ import AppKit
 final class ChatModel: ObservableObject {
     private static let maxAgentIterations = 12
     private static let systemPrompt = """
-    You are a sidebar assistant on the user's Mac. Each user message may include a <screen> block: a snapshot of the \
-    accessibility tree of the app window the user is looking at. Lines are indented by nesting and show role plus \
-    quoted text; "<- FOCUSED" marks the focused element.
+    You are a sidebar assistant on the user's Mac. Each user message starts with a <context> line naming the app and \
+    window the user is looking at. You don't see the window's contents until you ask for them.
 
-    Answer questions about what is on screen and help with the task at hand. Ground answers in the snapshot and quote \
-    exact text from it when useful. Be concise: this is a narrow sidebar, so prefer short paragraphs and lists.
+    Reading the screen: when the question is about what's on screen ("this", "here", "explain this page", anything \
+    referring to the window), call read_screen first. It returns the window's accessibility tree: lines indented by \
+    nesting with role plus quoted text, and "<- FOCUSED" on the focused element. Skip it for questions that don't \
+    need the screen (general knowledge, memory, web, follow-ups you can already answer). Ground on-screen answers in \
+    what it returned and quote exact text when useful. Call it again if the user says the screen changed. Be concise: this is a narrow sidebar, so prefer short paragraphs and lists.
 
     The user can attach their own screenshots or images to a message; they arrive as images before the text. \
     Treat them as what the user wants you to look at.
@@ -21,10 +23,9 @@ final class ChatModel: ObservableObject {
     Diagrams: when a picture would explain something better (flows, architectures, who-holds-what, sequences), \
     call make_diagram with Mermaid source. Never draw ASCII diagrams; the sidebar's font isn't monospaced.
 
-    Screenshots: the snapshot is your primary view and is usually enough. Call take_screenshot only when answering \
-    genuinely depends on visual information the snapshot lacks: images, charts, canvas or design apps, visual layout \
-    or styling, or a snapshot that is empty or clearly missing the content the user is asking about. Never take one \
-    to double-check text you can already read. If read_screen can refresh stale text, prefer it.
+    Screenshots: read_screen is cheaper and usually enough. Call take_screenshot only when answering genuinely \
+    depends on visual information it lacks: images, charts, canvas or design apps, visual layout or styling, or a \
+    read_screen result that is empty or clearly missing the content the user is asking about.
 
     Acting on the computer: when the user asks you to do something in their apps (send a message, fill in a form, \
     navigate somewhere, organize files) and use_computer is available, call it with one complete, self-contained \
@@ -67,7 +68,6 @@ final class ChatModel: ObservableObject {
 
     private let tools: ToolRegistry
     private var apiMessages: [JSON] = []
-    private var lastSentContext: ScreenContext?
     private var runTask: Task<Void, Never>?
     /// Every tool call in flight, including hidden ones that never get a transcript row.
     private var toolCalls: [String: ToolCallEntry] = [:]
@@ -215,8 +215,7 @@ final class ChatModel: ObservableObject {
         callsThisTurn = [:]
         toolCalls = [:]
         let firstReplyIndex = entries.count
-        let context = await captureScreen()
-        let content = userContent(for: question, context: context)
+        let content = userContent(for: question)
         let imageBlocks: [JSON] = attachments.flatMap { attachment -> [JSON] in
             let image: JSON = ["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": attachment.jpeg.base64EncodedString()]]
             guard let source = attachment.source else { return [image] }
@@ -253,7 +252,6 @@ final class ChatModel: ObservableObject {
         } catch {
             // Roll back to before this turn so the transcript never holds a tool_use without its result.
             apiMessages.removeSubrange(checkpoint...)
-            lastSentContext = nil
             appendNote("**Error:** \(error.localizedDescription)")
         }
     }
@@ -474,21 +472,15 @@ final class ChatModel: ObservableObject {
 
     // MARK: - Context
 
-    private func captureScreen() async -> ScreenContext? {
-        guard let app = tracker.app else { return nil }
-        return await Task.detached { AXSnapshot.capture(app: app) }.value
-    }
-
-    /// Only resends the screen snapshot when it changed, so follow-up questions stay cheap and cacheable.
-    private func userContent(for question: String, context: ScreenContext?) -> String {
-        var parts: [String] = []
-        if let context, context != lastSentContext {
-            parts.append("<screen app=\"\(context.appName)\" window=\"\(context.windowTitle)\">\n\(context.tree)\n</screen>")
-            lastSentContext = context
-        }
-        parts.append("<memory>\n\(Memory.overview())\n</memory>")
-        parts.append(question)
-        return parts.joined(separator: "\n\n")
+    /// Only names the app and window. The contents are read on demand with read_screen, like screenshots,
+    /// so questions that don't need the screen don't pay for it.
+    private func userContent(for question: String) -> String {
+        let app = tracker.app?.localizedName ?? "none"
+        return [
+            "<context app=\"\(app)\" window=\"\(tracker.windowTitle)\" />",
+            "<memory>\n\(Memory.overview())\n</memory>",
+            question,
+        ].joined(separator: "\n\n")
     }
 
     private func appendNote(_ text: String) {
@@ -547,7 +539,6 @@ final class ChatModel: ObservableObject {
         entries = []
         attachments = []
         apiMessages = []
-        lastSentContext = nil
         usage = ChatUsage()
         title = "New chat"
         ChatArchive.delete(id)
