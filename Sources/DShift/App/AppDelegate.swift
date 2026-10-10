@@ -45,6 +45,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = main
     }
 
+    /// Don't leave a Codex computer-use run behind when D-Shift quits mid-task.
+    func applicationWillTerminate(_ notification: Notification) {
+        CodexProcessTree.shutDownAll()
+    }
+
     private func setUpStatusItem() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "shift", accessibilityDescription: "D-Shift")

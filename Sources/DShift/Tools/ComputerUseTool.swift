@@ -112,11 +112,12 @@ enum CodexRunner {
         Log.info("codex", "start app-server \(codexPath) events=\(eventsURL.path)")
         Log.info("codex", "task: \(task)")
         try process.run()
-        let killer = DispatchWorkItem { if process.isRunning { process.terminate() } }
+        let killer = DispatchWorkItem { CodexProcessTree.shutDown(process) }
         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: killer)
+        CodexProcessTree.track(process)
         defer {
             killer.cancel()
-            if process.isRunning { process.terminate() }
+            CodexProcessTree.shutDown(process)
         }
 
         return try await withTaskCancellationHandler {
@@ -177,7 +178,7 @@ enum CodexRunner {
             let stderrTail = (try? String(contentsOf: stderrURL, encoding: .utf8))?.suffix(800) ?? ""
             throw ToolError.failed("Codex stopped without a result (timeout after \(Int(timeout))s?). \(stderrTail)")
         } onCancel: {
-            process.terminate()
+            CodexProcessTree.shutDown(process)
         }
     }
 
@@ -219,6 +220,72 @@ enum CodexRunner {
     states, stop and explain instead of guessing. End with a short summary of what you did and what, if anything, \
     is left.
     """
+}
+
+/// Tears down a `codex app-server` run completely. Each run spawns about 15 processes (a login shell, the Computer
+/// Use REPLs, sandboxed node kernels, MCP servers, a nested app-server), so terminating only the top process relies
+/// on every child noticing. This snapshots the whole tree first, sends SIGTERM to all of it, and SIGKILLs anything
+/// still alive after a grace period. It never touches the ChatGPT/Codex desktop app's own processes, which aren't
+/// descendants of D-Shift's run.
+enum CodexProcessTree {
+    private static let gracePeriod: TimeInterval = 2
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var running: [Process] = []
+
+    static func track(_ process: Process) {
+        lock.withLock { running.append(process) }
+    }
+
+    /// Safe to call more than once and from any thread.
+    static func shutDown(_ process: Process) {
+        let root = process.processIdentifier
+        lock.withLock { running.removeAll { $0 === process } }
+        guard root > 0 else { return }
+        let tree = descendants(of: root) + [root]
+        let alive = tree.filter { kill($0, 0) == 0 }
+        guard !alive.isEmpty else { return }
+        Log.info("codex", "shutting down \(alive.count) process(es) from run \(root)")
+        alive.forEach { kill($0, SIGTERM) }
+        DispatchQueue.global().asyncAfter(deadline: .now() + gracePeriod) {
+            let stragglers = alive.filter { kill($0, 0) == 0 }
+            guard !stragglers.isEmpty else { return }
+            Log.info("codex", "force-killing \(stragglers.count) process(es) that ignored SIGTERM: \(stragglers)")
+            stragglers.forEach { kill($0, SIGKILL) }
+        }
+    }
+
+    /// Stops every run still going, for app quit. Blocks briefly so children get SIGTERM before D-Shift exits.
+    static func shutDownAll() {
+        let processes = lock.withLock { running }
+        processes.forEach(shutDown)
+    }
+
+    /// All descendants, deepest first, via `pgrep -P` breadth-first walk. pgrep is used rather than libproc so
+    /// this has no private API dependency.
+    static func descendants(of root: pid_t) -> [pid_t] {
+        var result: [pid_t] = []
+        var queue = [root]
+        while !queue.isEmpty {
+            let parent = queue.removeFirst()
+            let children = childPIDs(of: parent)
+            result.append(contentsOf: children)
+            queue.append(contentsOf: children)
+        }
+        return result.reversed()
+    }
+
+    private static func childPIDs(of parent: pid_t) -> [pid_t] {
+        let pgrep = Process()
+        pgrep.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        pgrep.arguments = ["-P", String(parent)]
+        let output = Pipe()
+        pgrep.standardOutput = output
+        pgrep.standardError = FileHandle.nullDevice
+        guard (try? pgrep.run()) != nil else { return [] }
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        pgrep.waitUntilExit()
+        return String(decoding: data, as: UTF8.self).split(separator: "\n").compactMap { pid_t($0) }
+    }
 }
 
 /// Folds `codex app-server` notifications into progress lines and a final result.
