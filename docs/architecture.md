@@ -18,7 +18,7 @@ D-Shift is a single SwiftPM executable built on AppKit with SwiftUI views inside
 `SidebarPanel` is a borderless `NSPanel` with `.nonactivatingPanel`. It can become key, so you can type into it, without activating D-Shift. The app you're asking about stays frontmost, so its accessibility tree and window title remain the "current" context. Other settings:
 
 - `level = .floating` and `collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]`, so it follows you across Spaces and over fullscreen apps.
-- `sharingType = .none`, so it never appears in screenshots, screen recordings, or its own `take_screenshot` tool.
+- Visible in user screenshots and recordings; its own `take_screenshot` tool excludes the sidebar windows.
 - A `NSVisualEffectView` backdrop at reduced opacity under a sibling `NSHostingView`. Only the backdrop is translucent, and the text stays fully opaque.
 - Continuous-curve corners (`cornerCurve = .continuous`) to match macOS.
 

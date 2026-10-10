@@ -82,7 +82,7 @@ The row above the input shows, for the current chat: how full the context window
                     1 per question)  shell)          memory folder)
 ```
 
-1. On send, D-Shift snapshots the accessibility tree of the frontmost app's focused window and serializes it into compact indented text. The snapshot is only re-sent when it changes.
+1. On send, D-Shift tells the model only which app and window you're looking at. When the question needs the screen, the model calls `read_screen`, which serializes the focused window's accessibility tree into compact indented text. Screenshots work the same way, on demand.
 2. Each request also carries `me.md` and the list of memory files, so the model knows what it can look up.
 3. Claude streams back text and tool calls. Tools run locally; results go back to Claude until it finishes. Screen refreshes and memory reads and writes run in the background without a card in the chat. Screenshots show as a card with a thumbnail.
 4. Streaming text is revealed on a 60 fps clock that drains a fraction of the backlog each frame, so output is smooth rather than bursty.
@@ -125,7 +125,7 @@ Model settings live in `Sources/DShift/Chat/ClaudeClient.swift`: the model (`cla
 ## Privacy
 
 - Memory and history stay on your Mac.
-- Screen context (the accessibility snapshot, and screenshots when the model takes one) and the memory overview are sent to the Anthropic API with your questions. Don't use D-Shift on screens you aren't comfortable sending.
+- Screen context (the app and window name on every message, the accessibility snapshot when the model calls `read_screen`, and screenshots when it takes one) and the memory overview are sent to the Anthropic API with your questions. Don't use D-Shift on screens you aren't comfortable sending.
 - The sidebar excludes itself from screenshots and screen recordings.
 - Computer-use tasks are sent to Codex (OpenAI) along with whatever Codex sees in the apps it operates. Each task needs your approval.
 - Memory search strips `ANTHROPIC_API_KEY` from the environment of the commands it runs.

@@ -7,9 +7,21 @@ final class ChatStore: ObservableObject {
     @Published private(set) var chats: [ChatModel]
     @Published private(set) var selectedID: UUID
     var onLastChatClosed: (() -> Void)?
+    @Published var isHistoryOpen = false
+
+    private func wire(_ chat: ChatModel) {
+        chat.onStoreCommand = { [weak self] command in
+            switch command {
+            case .new: self?.newChat()
+            case .history: self?.isHistoryOpen = true
+            default: break
+            }
+        }
+    }
 
     init() {
         let first = ChatModel(tracker: tracker)
+        defer { wire(first) }
         chats = [first]
         selectedID = first.id
     }
@@ -20,8 +32,24 @@ final class ChatStore: ObservableObject {
 
     func newChat() {
         let chat = ChatModel(tracker: tracker)
+        wire(chat)
         chats.append(chat)
         selectedID = chat.id
+    }
+
+    /// Reopens a saved chat in a tab, or switches to it if it's already open.
+    func open(_ saved: SavedChat) {
+        if chats.contains(where: { $0.id == saved.id }) { return select(saved.id) }
+        let chat = ChatModel(tracker: tracker, restoring: saved)
+        wire(chat)
+        // Replace an untouched blank tab instead of piling up empty ones.
+        if selected.entries.isEmpty, !selected.isRunning, let index = chats.firstIndex(where: { $0.id == selectedID }) {
+            chats[index] = chat
+        } else {
+            chats.append(chat)
+        }
+        selectedID = chat.id
+        selected.focusRequest += 1
     }
 
     func select(_ id: UUID) {

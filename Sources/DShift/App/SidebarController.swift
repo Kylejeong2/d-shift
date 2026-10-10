@@ -43,8 +43,6 @@ final class SidebarController {
         panel.hidesOnDeactivate = false
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.minSize = Self.minSize
-        // Keep the sidebar out of screenshots and screen recordings, including its own take_screenshot tool.
-        panel.sharingType = .none
 
         let container = NSView()
         container.wantsLayer = true
@@ -57,16 +55,16 @@ final class SidebarController {
         backdrop.blendingMode = .behindWindow
         backdrop.state = .active
         backdrop.alphaValue = Self.backdropOpacity
-        backdrop.wantsLayer = true
-        Self.roundCorners(of: backdrop)
+        // Behind-window blur ignores layer corner masks, so without a mask image its square corners poke out.
+        backdrop.maskImage = Self.roundedMask
 
         let hosting = NSHostingView(rootView: SidebarView(store: store, onClose: { [weak panel] in panel?.orderOut(nil) }))
         store.onLastChatClosed = { [weak panel] in panel?.orderOut(nil) }
         for view in [backdrop, hosting] as [NSView] {
             Self.pin(view, in: container)
         }
-        // Handles sit on a root view above the rounded, clipped container so the corner handles reach into the
-        // transparent rounded-off corners instead of being clipped away.
+        // Handles sit on a root view above the rounded, clipped container; each one clips its own fill to the
+        // rounded shape (see ResizeHandle.draw).
         let root = NSView()
         Self.pin(container, in: root)
         panel.contentView = root
@@ -74,6 +72,7 @@ final class SidebarController {
         let handleEdges: [ResizeHandle.Edges] = [.left, .top, .bottom, [.top, .left], [.bottom, .left]]
         for edges in handleEdges {
             let handle = ResizeHandle(edges: edges) { [weak self] frame in self?.saveFrame(frame) }
+            handle.cornerRadius = Self.cornerRadius
             handle.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(handle)
             let thickness = Self.handleThickness
@@ -113,6 +112,13 @@ final class SidebarController {
 
     func toggle() {
         panel.isVisible ? panel.orderOut(nil) : show()
+    }
+
+    /// Ctrl+Shift: screenshot the focused window into the current chat, then bring the sidebar up.
+    func appshot() async {
+        await store.selected.attachWindowScreenshot()
+        reveal()
+        store.selected.focusRequest += 1
     }
 
     func reveal() {
@@ -165,6 +171,18 @@ final class SidebarController {
             view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
     }
+
+    private static let roundedMask: NSImage = {
+        let edge = cornerRadius * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(top: cornerRadius, left: cornerRadius, bottom: cornerRadius, right: cornerRadius)
+        image.resizingMode = .stretch
+        return image
+    }()
 
     private static func roundCorners(of view: NSView) {
         view.layer?.cornerRadius = cornerRadius

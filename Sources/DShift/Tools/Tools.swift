@@ -21,6 +21,13 @@ protocol Tool {
     func run(_ input: JSON) async throws -> ToolOutput
     /// Long-running tools can report progress, shown live on their card. Defaults to `run(_:)`.
     func run(_ input: JSON, progress: @escaping (String) -> Void) async throws -> ToolOutput
+    /// Tools that need the user's permission mid-run (for example to control an app) ask through `requestAccess`.
+    /// Defaults to `run(_:progress:)`.
+    func run(
+        _ input: JSON,
+        progress: @escaping (String) -> Void,
+        requestAccess: @escaping (String) async -> AppAccess
+    ) async throws -> ToolOutput
 }
 
 extension Tool {
@@ -29,6 +36,14 @@ extension Tool {
 
     func run(_ input: JSON, progress: @escaping (String) -> Void) async throws -> ToolOutput {
         try await run(input)
+    }
+
+    func run(
+        _ input: JSON,
+        progress: @escaping (String) -> Void,
+        requestAccess: @escaping (String) async -> AppAccess
+    ) async throws -> ToolOutput {
+        try await run(input, progress: progress)
     }
 }
 

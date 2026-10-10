@@ -4,10 +4,11 @@ import ScreenCaptureKit
 struct ReadScreenTool: Tool {
     let tracker: AppTracker
 
-    let isHidden = true
     let name = "read_screen"
-    let description = "Re-read the accessibility tree of the app window the user is currently looking at. Use when the user says the screen changed or the snapshot in the conversation looks stale."
+    let description = "Read the accessibility tree (all text and controls) of the app window the user is looking at. Call this before answering anything about what's on screen, and again when the screen may have changed."
     let inputSchema: JSON = ["type": "object", "properties": [String: Any](), "additionalProperties": false]
+    let maxCallsPerTurn: Int? = 3
+
     func requiresApproval(for input: JSON) -> Bool { false }
 
     func run(_ input: JSON) async throws -> ToolOutput {
@@ -58,7 +59,9 @@ struct ScreenshotTool: Tool {
         } else {
             let display = content.displays.first { $0.frame.contains(window?.frame.origin ?? .zero) } ?? content.displays.first
             guard let display else { return ToolOutput(text: "No display found.") }
-            filter = SCContentFilter(display: display, excludingWindows: [])
+            // The sidebar shows up in user screenshots, but Claude's own screenshots leave it out.
+            let ownWindows = content.windows.filter { $0.owningApplication?.processID == getpid() }
+            filter = SCContentFilter(display: display, excludingWindows: ownWindows)
             frame = display.frame
             description = "Full screen"
         }
