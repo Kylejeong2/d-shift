@@ -7,8 +7,8 @@ struct DiagramTool: Tool {
     let name = "make_diagram"
     let description = """
         Draw a diagram (flowchart, sequence, architecture, state, class, ER, timeline, mindmap) from Mermaid source and \
-        show it to the user as an image. Use this whenever a visual explanation helps, and never draw diagrams in ASCII \
-        or code blocks. The sidebar is narrow: prefer top-to-bottom layouts (`flowchart TD`), short node labels, and at \
+        show it to the user as an image inside the sidebar. Only use this when the user explicitly asks for a diagram in \
+        the chat; for other visual explanations use draw_on_screen, show_3d_model, or scratchpad. The sidebar is narrow: prefer top-to-bottom layouts (`flowchart TD`), short node labels, and at \
         most about 15 nodes. Use subgraphs to show ownership or boundaries. Returns the rendered image, or the Mermaid \
         error so you can fix the source and try again.
         """

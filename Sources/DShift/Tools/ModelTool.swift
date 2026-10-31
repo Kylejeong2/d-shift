@@ -91,6 +91,7 @@ struct ModelTool: Tool {
             The attached image is your first build, rendered from the front. Its JSON Lines:
             \(first.lines.joined(separator: "\n"))
             """
+        window.replacesLabels = true
         do {
             let pass = try await stream(
                 instructions: instructions + polishInstructions, input: input, image: image, into: window)
@@ -200,7 +201,8 @@ struct ModelTool: Tool {
         domes, fuselages, nose cones. Use 8 to 30 profile points for a smooth silhouette
         {"shape":"extrude","points":[[x,y],...],"depth":d,"position":[x,y,z],"rotation":[rx,ry,rz]}   a 2D outline (in the \
         xy plane, centered near 0,0) extruded along z: blades, airfoils, gear teeth, plates, brackets, letters
-        {"label":"Text","position":[x,y,z]}   small floating label; at most about 8, only where they explain something
+        {"label":"Text","position":[x,y,z]}   floating label of one to three words; at most 5, spread apart so they \
+        never overlap, only on the parts that explain the idea
 
         Materials: define each once, then reference it with "m" on shapes (keys on a shape override its material):
         {"mat":"pearl","color":"#rrggbb","metalness":0.1,"roughness":0.35}   also "opacity" (0..1) and "emission":"#rrggbb"
@@ -251,6 +253,8 @@ struct ModelTool: Tool {
         parts, floating or intersecting pieces, lumpy forms, missing defining features, flat or muddy materials, \
         unreadable labels. Then output only JSON Lines that fix and enrich it:
         - {"remove":"id"} deletes a part; a shape line with an existing "id" replaces that part.
+        - Label lines replace every existing label, so if you output any, output the full final set (at most 5, one to \
+          three words each, spread apart). Output none to keep the current labels.
         - New parts, materials, and groups use the same format as before.
         Prioritize the fixes a viewer would notice first. Don't repeat the title line. At most about 80 lines.
         """
@@ -268,7 +272,6 @@ enum ModelHistory {
 /// rotates it; pinch zooms; a toolbar on hover resets the view, toggles labels, and closes. Esc closes every model.
 @MainActor
 final class ModelWindow: NSObject {
-    private static let size: CGFloat = 560
     private static var openWindows: [ModelWindow] = []
     private static var escapeMonitor: EventMonitor?
 
@@ -278,6 +281,8 @@ final class ModelWindow: NSObject {
     private let rotator = SCNNode()
     private let camera = SCNNode()
     private var labels: [SCNNode] = []
+    /// Set when the polish pass starts: its first label line clears the old labels, so labels never pile up.
+    var replacesLabels = false
     private var groups: [String: SCNNode] = [:]
     private var materials: [String: JSON] = [:]
     private var parts: [String: SCNNode] = [:]
@@ -293,12 +298,12 @@ final class ModelWindow: NSObject {
     }
 
     private init(cascade: Int) {
-        let screen = NSScreen.underMouse
+        let visible = NSScreen.underMouse.visibleFrame
+        // Big enough to read the labels: two thirds of the display's shorter side.
+        let size = max(560, min(visible.width, visible.height) * 2 / 3)
         let offset = CGFloat(cascade) * 40
         let frame = NSRect(
-            x: screen.frame.midX - Self.size / 2 + offset, y: screen.frame.midY - Self.size / 2 - offset,
-            width: Self.size, height: Self.size
-        )
+            x: visible.midX - size / 2 + offset, y: visible.midY - size / 2 - offset, width: size, height: size)
         window = ModelPanel(
             contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         // Above the sidebar (which floats at .floating), so a model can be dragged over it.
@@ -379,6 +384,11 @@ final class ModelWindow: NSObject {
         guard var node = ModelPart.node(from: part) else { return false }
         if let spec = part["repeat"] as? JSON { node = repeated(node, spec) }
         if part["label"] != nil {
+            if replacesLabels {
+                labels.forEach { $0.removeFromParentNode() }
+                labels = []
+                replacesLabels = false
+            }
             // Labels come last, so the model's size is known: keep them small relative to it.
             let scale = max(CGFloat(model.boundingSphere.radius), 1) * 0.08
             node.scale = SCNVector3(scale, scale, scale)
@@ -558,7 +568,8 @@ final class ModelWindow: NSObject {
             stack.topAnchor.constraint(equalTo: pill.topAnchor),
             stack.bottomAnchor.constraint(equalTo: pill.bottomAnchor),
         ])
-        pill.setFrameOrigin(NSPoint(x: (Self.size - pill.frame.width) / 2, y: Self.size - pill.frame.height - 12))
+        pill.setFrameOrigin(
+            NSPoint(x: (view.bounds.width - pill.frame.width) / 2, y: view.bounds.height - pill.frame.height - 12))
         // Stays centered at the top as pinching resizes the window.
         pill.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin]
         pill.alphaValue = 0
@@ -784,7 +795,7 @@ private enum ModelPart {
             .font: NSFont.systemFont(ofSize: 28, weight: .semibold),
             .foregroundColor: NSColor.white,
         ]
-        let string = String(text.prefix(40)) as NSString
+        let string = String(text.prefix(28)) as NSString
         let textSize = string.size(withAttributes: attributes)
         let padding = CGSize(width: 20, height: 10)
         let imageSize = NSSize(width: textSize.width + padding.width * 2, height: textSize.height + padding.height * 2)
