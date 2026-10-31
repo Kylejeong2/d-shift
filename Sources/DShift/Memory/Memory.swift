@@ -7,11 +7,7 @@ enum Storage {
         return dir
     }()
 
-    static let historyDir: URL = {
-        let dir = Config.dataDir.appendingPathComponent("history", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }()
+    static let historyDir = Config.directory("history")
 }
 
 /// Memory is a plain folder of markdown files. The model searches and edits it with hidden tools;

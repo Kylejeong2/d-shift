@@ -103,8 +103,7 @@ struct OverlayTool: Tool {
         }
         await overlay.commit(html, drawing: drawing, clearsOnAppSwitch: !isStandalone)
 
-        let cost = (Double(tokens.input) * OpenAIClient.inputPrice + Double(tokens.output) * OpenAIClient.outputPrice) / 1_000_000
-        Log.info("overlay", "drew \(html.count) chars, \(tokens.input) in / \(tokens.output) out, $\(String(format: "%.3f", cost))")
+        Log.info("overlay", "drew \(html.count) chars, \(OpenAIClient.costSummary(input: tokens.input, output: tokens.output))")
         return ToolOutput(text: "Drawn on the user's screen. They can see it now; Esc clears it.")
     }
 
@@ -280,7 +279,7 @@ final class OverlayController: NSObject, WKNavigationDelegate {
     /// The last drawing's prompt and committed HTML, for `--overlay-test`.
     private(set) var lastHTML = ""
     var lastPrompt = ""
-    private var monitors: [Any] = []
+    private var escapeMonitor: EventMonitor?
     private let hitAreas: HitAreaReceiver
     private var mouseTimer: Timer?
     private var appSwitchObserver: NSObjectProtocol?
@@ -323,8 +322,7 @@ final class OverlayController: NSObject, WKNavigationDelegate {
             let center = CGPoint(x: windowFrame.midX, y: windowFrame.midY)
             if let match = screens.first(where: { globalFrame(of: $0).contains(center) }) { return match }
         }
-        let mouse = NSEvent.mouseLocation
-        return screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? screens[0]
+        return .underMouse
     }
 
     /// A screen's frame in accessibility coordinates: global points with the origin at the main display's top-left.
@@ -419,24 +417,12 @@ final class OverlayController: NSObject, WKNavigationDelegate {
 
     /// Esc anywhere clears the drawing. Switching apps does too, once it's committed.
     private func startDismissMonitors() {
-        guard monitors.isEmpty else { return }
-        let escape: UInt16 = 53
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
-            if event.keyCode == escape { MainActor.assumeIsolated { self?.dismiss(reason: "esc") } }
-        }) {
-            monitors.append(global)
-        }
-        if let local = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
-            if event.keyCode == escape { self?.dismiss(reason: "esc") }
-            return event
-        }) {
-            monitors.append(local)
-        }
+        guard escapeMonitor == nil else { return }
+        escapeMonitor = .escape { [weak self] in self?.dismiss(reason: "esc") }
     }
 
     private func stopDismissMonitors() {
-        monitors.forEach(NSEvent.removeMonitor)
-        monitors = []
+        escapeMonitor = nil
         if let appSwitchObserver { NSWorkspace.shared.notificationCenter.removeObserver(appSwitchObserver) }
         appSwitchObserver = nil
     }

@@ -179,23 +179,18 @@ private struct FeedbackComposer: View {
 
 @MainActor
 enum Feedback {
-    static let dir: URL = {
-        let dir = Config.dataDir.appendingPathComponent("feedback", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }()
+    static let dir = Config.directory("feedback")
 
     private static let transcriptTail = 8
 
     static func captureDisplay() async throws -> NSImage? {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        let displayID = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+        let screen = NSScreen.underMouse
+        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
         guard let display = content.displays.first(where: { $0.displayID == displayID }) ?? content.displays.first else { return nil }
 
         let configuration = SCStreamConfiguration()
-        let scale = screen?.backingScaleFactor ?? 2
+        let scale = screen.backingScaleFactor
         configuration.width = Int(CGFloat(display.width) * scale)
         configuration.height = Int(CGFloat(display.height) * scale)
         let image = try await SCScreenshotManager.captureImage(

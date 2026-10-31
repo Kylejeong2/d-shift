@@ -22,6 +22,13 @@ enum Config {
         return dir
     }()
 
+    /// A subdirectory of `base` (the data dir by default), created on first use.
+    static func directory(_ name: String, in base: URL = dataDir) -> URL {
+        let dir = base.appendingPathComponent(name, isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     private static var dotenvFiles: [URL] {
         [
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent(".env"),

@@ -28,11 +28,7 @@ struct SavedChat: Codable, Identifiable {
 /// Saved chats live in `history/chats/<id>/`: `chat.json` for the transcript, `api.json` for the raw model messages,
 /// and one JPEG per attached image. The daily JSONL log in `ChatHistory` stays as a plain-text audit trail.
 enum ChatArchive {
-    static let dir: URL = {
-        let dir = Storage.historyDir.appendingPathComponent("chats", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }()
+    static let dir = Config.directory("chats", in: Storage.historyDir)
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()

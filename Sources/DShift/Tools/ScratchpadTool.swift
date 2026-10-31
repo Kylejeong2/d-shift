@@ -117,14 +117,7 @@ final class Scratchpad: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
         backdrop.material = .hudWindow
         backdrop.blendingMode = .behindWindow
         backdrop.state = .active
-        webView.translatesAutoresizingMaskIntoConstraints = false
-        backdrop.addSubview(webView)
-        NSLayoutConstraint.activate([
-            webView.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
-            webView.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
-            webView.topAnchor.constraint(equalTo: backdrop.topAnchor),
-            webView.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
-        ])
+        backdrop.addPinnedSubview(webView)
         // The web view can't start a window drag, so a native strip over the header's left side does. The header's
         // buttons sit to its right and stay clickable.
         let dragHandle = DragHandle()

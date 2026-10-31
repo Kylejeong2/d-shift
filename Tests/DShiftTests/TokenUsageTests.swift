@@ -21,3 +21,10 @@ struct TokenUsageTests {
         #expect(abs(chat.estimatedCost - 0.0158) < 0.0001)
     }
 }
+
+struct SolCostTests {
+    @Test func summarizesTokensAndUltrafastCost() {
+        #expect(OpenAIClient.costSummary(input: 1_000, output: 2_000) == "1000 in / 2000 out, $0.132")
+        #expect(OpenAIClient.costSummary(input: 0, output: 0) == "0 in / 0 out, $0.000")
+    }
+}

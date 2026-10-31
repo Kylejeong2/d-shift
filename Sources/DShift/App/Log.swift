@@ -3,11 +3,7 @@ import Foundation
 /// Appends timestamped lines to `logs/dshift.log` in the data dir and echoes them to stdout, so `scripts/dev.sh`
 /// shows them live. Never log API keys or message contents beyond what's needed to debug.
 enum Log {
-    static let dir: URL = {
-        let dir = Config.dataDir.appendingPathComponent("logs", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }()
+    static let dir = Config.directory("logs")
 
     private static let file = dir.appendingPathComponent("dshift.log")
     private static let queue = DispatchQueue(label: "dshift.log")

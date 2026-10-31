@@ -15,34 +15,22 @@ enum OpenAIClient {
     static let inputPrice = 12.0
     static let outputPrice = 60.0
 
+    static func costSummary(input: Int, output: Int) -> String {
+        let cost = (Double(input) * inputPrice + Double(output) * outputPrice) / 1_000_000
+        return "\(input) in / \(output) out, $\(String(format: "%.3f", cost))"
+    }
+
     static var hasKey: Bool { Config.value("OPENAI_API_KEY") != nil }
 
     /// `effort` is the reasoning effort: more lets the model plan a design before it starts streaming.
     static func stream(
         instructions: String, input: String, jpeg: Data? = nil, effort: String = "medium", maxOutputTokens: Int
     ) -> AsyncThrowingStream<OpenAIStreamEvent, Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task {
-                do {
-                    let request = try makeRequest(
-                        instructions: instructions, input: input, jpeg: jpeg, effort: effort, maxOutputTokens: maxOutputTokens
-                    )
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                    if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                        var body = ""
-                        for try await line in bytes.lines { body += line }
-                        throw ToolError.failed("OpenAI HTTP \(http.statusCode): \(body)")
-                    }
-                    for try await line in bytes.lines {
-                        if let event = try parseEvent(line) { continuation.yield(event) }
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
+        ServerSentEvents.stream(
+            { try makeRequest(instructions: instructions, input: input, jpeg: jpeg, effort: effort, maxOutputTokens: maxOutputTokens) },
+            httpError: { ToolError.failed("OpenAI HTTP \($0): \($1)") },
+            parse: { try parseEvent($0).map { [$0] } ?? [] }
+        )
     }
 
     private static func makeRequest(
@@ -73,10 +61,8 @@ enum OpenAIClient {
         return request
     }
 
-    private static func parseEvent(_ line: String) throws -> OpenAIStreamEvent? {
-        guard line.hasPrefix("data: "),
-              let event = try? JSONSerialization.jsonObject(with: Data(line.dropFirst(6).utf8)) as? JSON
-        else { return nil }
+    static func parseEvent(_ line: String) throws -> OpenAIStreamEvent? {
+        guard let event = try? ServerSentEvents.payload(line) else { return nil }
 
         switch event["type"] as? String {
         case "response.output_text.delta":

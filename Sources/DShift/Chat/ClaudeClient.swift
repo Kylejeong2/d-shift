@@ -36,26 +36,11 @@ enum ClaudeClient {
     private static let effort = "low"
 
     static func stream(system: String, messages: [JSON], tools: [JSON]) -> AsyncThrowingStream<StreamEvent, Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task {
-                do {
-                    let request = try makeRequest(system: system, messages: messages, tools: tools)
-                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
-                    if let http = response as? HTTPURLResponse, http.statusCode != 200 {
-                        var body = ""
-                        for try await line in bytes.lines { body += line }
-                        throw ClaudeError.http(status: http.statusCode, body: body)
-                    }
-                    for try await line in bytes.lines {
-                        for event in try parseEvents(line) { continuation.yield(event) }
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
+        ServerSentEvents.stream(
+            { try makeRequest(system: system, messages: messages, tools: tools) },
+            httpError: { ClaudeError.http(status: $0, body: $1) },
+            parse: parseEvents
+        )
     }
 
     private static func makeRequest(system: String, messages: [JSON], tools: [JSON]) throws -> URLRequest {
@@ -81,10 +66,8 @@ enum ClaudeClient {
         return request
     }
 
-    private static func parseEvents(_ line: String) throws -> [StreamEvent] {
-        guard line.hasPrefix("data: "),
-              let event = try JSONSerialization.jsonObject(with: Data(line.dropFirst(6).utf8)) as? JSON
-        else { return [] }
+    static func parseEvents(_ line: String) throws -> [StreamEvent] {
+        guard let event = try ServerSentEvents.payload(line) else { return [] }
 
         let index = event["index"] as? Int ?? 0
         switch event["type"] as? String {

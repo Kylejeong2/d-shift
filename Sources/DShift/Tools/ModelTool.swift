@@ -104,10 +104,7 @@ struct ModelTool: Tool {
             String(format: "first part after %.1fs, done after %.1fs", firstPart ?? 0, Date().timeIntervalSince(start))
         }
 
-        var costSummary: String {
-            let cost = (Double(tokens.input) * OpenAIClient.inputPrice + Double(tokens.output) * OpenAIClient.outputPrice) / 1_000_000
-            return "\(tokens.input) in / \(tokens.output) out, $\(String(format: "%.3f", cost))"
-        }
+        var costSummary: String { OpenAIClient.costSummary(input: tokens.input, output: tokens.output) }
     }
 
     /// Streams JSON Lines from Sol into `window`, adding each part the moment its line completes.
@@ -260,7 +257,7 @@ enum ModelHistory {
 final class ModelWindow: NSObject {
     private static let size: CGFloat = 560
     private static var openWindows: [ModelWindow] = []
-    private static var escapeMonitors: [Any] = []
+    private static var escapeMonitor: EventMonitor?
 
     private let window: ModelPanel
     private let view: ModelView
@@ -283,8 +280,7 @@ final class ModelWindow: NSObject {
     }
 
     private init(cascade: Int) {
-        let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
+        let screen = NSScreen.underMouse
         let offset = CGFloat(cascade) * 40
         let frame = NSRect(
             x: screen.frame.midX - Self.size / 2 + offset, y: screen.frame.midY - Self.size / 2 - offset,
@@ -553,25 +549,12 @@ final class ModelWindow: NSObject {
     @objc private func closePressed() { close() }
 
     private static func startEscapeMonitors() {
-        guard escapeMonitors.isEmpty else { return }
-        let escape: UInt16 = 53
-        let closeAll = { MainActor.assumeIsolated { openWindows.forEach { $0.close() } } }
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { event in
-            if event.keyCode == escape { closeAll() }
-        }) {
-            escapeMonitors.append(global)
-        }
-        if let local = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { event in
-            if event.keyCode == escape { closeAll() }
-            return event
-        }) {
-            escapeMonitors.append(local)
-        }
+        guard escapeMonitor == nil else { return }
+        escapeMonitor = .escape { openWindows.forEach { $0.close() } }
     }
 
     private static func stopEscapeMonitors() {
-        escapeMonitors.forEach(NSEvent.removeMonitor)
-        escapeMonitors = []
+        escapeMonitor = nil
     }
 }
 

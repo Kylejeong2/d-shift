@@ -61,12 +61,12 @@ final class SidebarController {
         let hosting = NSHostingView(rootView: SidebarView(store: store, onClose: { [weak panel] in panel?.orderOut(nil) }))
         store.onLastChatClosed = { [weak panel] in panel?.orderOut(nil) }
         for view in [backdrop, hosting] as [NSView] {
-            Self.pin(view, in: container)
+            container.addPinnedSubview(view)
         }
         // Handles sit on a root view above the rounded, clipped container; each one clips its own fill to the
         // rounded shape (see ResizeHandle.draw).
         let root = NSView()
-        Self.pin(container, in: root)
+        root.addPinnedSubview(container)
         panel.contentView = root
 
         let handleEdges: [ResizeHandle.Edges] = [.left, .top, .bottom, [.top, .left], [.bottom, .left]]
@@ -126,26 +126,24 @@ final class SidebarController {
     }
 
     private func show() {
-        let screen = NSScreen.screens.first { NSMouseInRect(NSEvent.mouseLocation, $0.frame, false) } ?? NSScreen.main
-        if let visible = screen?.visibleFrame {
-            let maxHeight = visible.height - Self.edgeInset * 2
-            let maxWidth = visible.width - Self.edgeInset * 2
-            panel.maxSize = CGSize(width: maxWidth, height: maxHeight)
+        let visible = NSScreen.underMouse.visibleFrame
+        let maxHeight = visible.height - Self.edgeInset * 2
+        let maxWidth = visible.width - Self.edgeInset * 2
+        panel.maxSize = CGSize(width: maxWidth, height: maxHeight)
 
-            let defaults = UserDefaults.standard
-            let savedWidth = defaults.double(forKey: Self.widthKey)
-            let savedHeight = defaults.double(forKey: Self.heightKey)
-            let width = min(max(savedWidth > 0 ? savedWidth : Self.defaultWidth, Self.minSize.width), maxWidth)
-            let height = min(max(savedHeight > 0 ? savedHeight : maxHeight, Self.minSize.height), maxHeight)
-            let savedTopInset = defaults.object(forKey: Self.topInsetKey) as? Double ?? Self.edgeInset
-            let topInset = min(max(savedTopInset, 0), visible.height - height)
-            panel.setFrame(NSRect(
-                x: visible.maxX - width - Self.edgeInset,
-                y: visible.maxY - topInset - height,
-                width: width,
-                height: height
-            ), display: true)
-        }
+        let defaults = UserDefaults.standard
+        let savedWidth = defaults.double(forKey: Self.widthKey)
+        let savedHeight = defaults.double(forKey: Self.heightKey)
+        let width = min(max(savedWidth > 0 ? savedWidth : Self.defaultWidth, Self.minSize.width), maxWidth)
+        let height = min(max(savedHeight > 0 ? savedHeight : maxHeight, Self.minSize.height), maxHeight)
+        let savedTopInset = defaults.object(forKey: Self.topInsetKey) as? Double ?? Self.edgeInset
+        let topInset = min(max(savedTopInset, 0), visible.height - height)
+        panel.setFrame(NSRect(
+            x: visible.maxX - width - Self.edgeInset,
+            y: visible.maxY - topInset - height,
+            width: width,
+            height: height
+        ), display: true)
         panel.makeKeyAndOrderFront(nil)
         panel.invalidateShadow()
         store.selected.focusRequest += 1
@@ -159,17 +157,6 @@ final class SidebarController {
         if let visible = panel.screen?.visibleFrame {
             defaults.set(Double(visible.maxY - frame.maxY), forKey: Self.topInsetKey)
         }
-    }
-
-    private static func pin(_ view: NSView, in container: NSView) {
-        view.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(view)
-        NSLayoutConstraint.activate([
-            view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            view.topAnchor.constraint(equalTo: container.topAnchor),
-            view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
     }
 
     private static let roundedMask: NSImage = {
