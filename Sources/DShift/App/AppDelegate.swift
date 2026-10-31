@@ -25,6 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpEditMenu()
     }
 
+    /// Launching D-Shift again while it runs opens the sidebar instead of starting a second copy.
+    func showSidebar() {
+        sidebar?.show()
+    }
+
     /// Accessory apps get no menu bar, and without an Edit menu Cmd+C/X/A have nothing to route to, so text
     /// selected in replies couldn't be copied. The menu is never visible; it only supplies the key equivalents.
     private func setUpEditMenu() {
