@@ -8,7 +8,8 @@ import WebKit
 struct ScratchpadTool: Tool {
     let name = "scratchpad"
     let description = """
-        A floating notepad on the user's screen that you and the user share. Use it only when it helps: working through \
+        A floating notepad on the user's screen that you and the user share. Use it on your own, without being asked, \
+        when it helps: working through \
         a multi-step problem or calculation, drafting text the user will copy or edit (an email, a message, a plan), \
         sketching something with code (a plot, geometry, a quick diagram of your working), or keeping notes or a \
         checklist across turns. Don't use it for short answers that fit in chat.

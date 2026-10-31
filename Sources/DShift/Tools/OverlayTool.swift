@@ -14,7 +14,8 @@ struct OverlayTool: Tool {
         arrows with callouts pointing at things, numbered step-by-step annotations, charts, or diagrams. A fast \
         graphics model draws from your description using the live position of every element in the focused window, so \
         name the elements to point at by their visible text. For 3D models use show_3d_model instead. A new drawing replaces the previous one, and it stays until \
-        the user presses Esc or switches apps (standalone drawings stay until Esc). Cards can be dragged around. Prefer this over make_diagram when the answer is about something on screen. \
+        the user presses Esc or switches apps (standalone drawings stay until Esc). Cards can be dragged around. This is the default way to explain things visually, with or without a request to draw. Ask for a few large, short \
+        labels (a handful of words each) rather than paragraphs. \
         Keep your chat reply short afterwards; the drawing is the answer.
         """
     let inputSchema: JSON = [
@@ -145,6 +146,10 @@ struct OverlayTool: Tool {
         tabular numbers for data). Choose a palette that suits the content and contrasts with the app underneath, and \
         vary it between requests. Motion should be quick and purposeful (150-600ms, eased, staggered), never looping \
         forever except a subtle idle effect. Avoid the generic look: identical dark boxes, one flat accent, plain arrows.
+
+        Words: the drawing must read at a glance from arm's length. Prefer one bold idea per card, a headline of a few \
+        words, and at most one or two short lines of body text. Show the idea with shapes, arrows, and color rather than \
+        sentences; the chat carries the detail. Don't stack labels on top of each other or on top of busy content.
 
         Never cover the whole screen or the thing being explained; leave what you aren't annotating readable. Put \
         explanations, charts, and diagrams beside the relevant area. Text must stay legible on any background.
