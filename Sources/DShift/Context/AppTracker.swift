@@ -29,10 +29,30 @@ final class AppTracker: ObservableObject {
     }
 
     private func track(_ newApp: NSRunningApplication?) {
-        guard let newApp, newApp.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return }
+        guard let newApp, newApp.processIdentifier != ProcessInfo.processInfo.processIdentifier,
+            Self.hasNormalWindow(newApp.processIdentifier)
+        else { return }
         app = newApp
         observe(newApp)
         refreshTitle()
+    }
+
+    /// Recorders, launchers, and menu bar apps can take focus with only floating widgets on screen (Screen Studio's
+    /// recording controls, for example). Those aren't what the user is looking at, so keep following the last app
+    /// with an ordinary visible window. Reading window layers and bounds needs no Screen Recording permission.
+    static func hasNormalWindow(_ pid: pid_t) -> Bool {
+        let windows =
+            CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[String: Any]] ?? []
+        return windows.contains { window in
+            guard window[kCGWindowOwnerPID as String] as? pid_t == pid,
+                window[kCGWindowLayer as String] as? Int == 0,
+                (window[kCGWindowAlpha as String] as? Double ?? 0) > 0,
+                let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+                let frame = CGRect(dictionaryRepresentation: bounds)
+            else { return false }
+            return frame.width >= 200 && frame.height >= 150
+        }
     }
 
     private func observe(_ app: NSRunningApplication) {
