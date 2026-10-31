@@ -235,6 +235,7 @@ if let flag = CommandLine.arguments.firstIndex(of: "--chat-test"), CommandLine.a
     RunLoop.main.run()
 }
 
+SingleInstance.claim()
 let app = NSApplication.shared
 let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate
