@@ -59,7 +59,8 @@ enum ChatArchive {
     /// Newest first. Skips folders that fail to decode rather than failing the whole list.
     static func list() -> [SavedChat] {
         let folders = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
-        return folders
+        return
+            folders
             .compactMap { try? Data(contentsOf: $0.appendingPathComponent("chat.json")) }
             .compactMap { try? decoder.decode(SavedChat.self, from: $0) }
             .sorted { $0.updatedAt > $1.updatedAt }
@@ -72,7 +73,8 @@ enum ChatArchive {
     }
 
     static func attachment(_ attachmentID: UUID, in chatID: UUID) -> Attachment? {
-        let file = dir.appendingPathComponent(chatID.uuidString).appendingPathComponent("\(attachmentID.uuidString).jpg")
+        let file = dir.appendingPathComponent(chatID.uuidString).appendingPathComponent(
+            "\(attachmentID.uuidString).jpg")
         return (try? Data(contentsOf: file)).flatMap { Attachment(jpeg: $0, id: attachmentID) }
     }
 

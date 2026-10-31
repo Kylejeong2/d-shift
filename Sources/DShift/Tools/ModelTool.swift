@@ -12,24 +12,26 @@ struct ModelTool: Tool {
 
     let name = "show_3d_model"
     let description = """
-    Show an interactive 3D model floating on the user's screen: molecules, anatomy, planets and orbits, machines, \
-    buildings, math surfaces, anything that's clearer in 3D. A 3D designer model streams it in part by part, so the \
-    user watches it assemble, and moving parts can animate. The user can drag it anywhere, swipe with two fingers or \
-    Option-drag to rotate, and pinch to zoom; Esc or right-click closes it. Every call designs and builds from \
-    scratch. When the user asks to rebuild, retry, or improve a model, don't repeat the same request: pick a clearly \
-    different creative direction (cutaway vs exterior, exploded view, x-ray, stylized vs realistic, palette, level \
-    of detail) and put it in `direction`. Keep your chat reply short.
-    """
+        Show an interactive 3D model floating on the user's screen: molecules, anatomy, planets and orbits, machines, \
+        buildings, math surfaces, anything that's clearer in 3D. A 3D designer model streams it in part by part, so the \
+        user watches it assemble, and moving parts can animate. The user can drag it anywhere, swipe with two fingers or \
+        Option-drag to rotate, and pinch to zoom; Esc or right-click closes it. Every call designs and builds from \
+        scratch. When the user asks to rebuild, retry, or improve a model, don't repeat the same request: pick a clearly \
+        different creative direction (cutaway vs exterior, exploded view, x-ray, stylized vs realistic, palette, level \
+        of detail) and put it in `direction`. Keep your chat reply short.
+        """
     let inputSchema: JSON = [
         "type": "object",
         "properties": [
             "description": [
                 "type": "string",
-                "description": "What to model and what to emphasize or label, e.g. \"A wind turbine showing how wind becomes electricity.\"",
+                "description":
+                    "What to model and what to emphasize or label, e.g. \"A wind turbine showing how wind becomes electricity.\"",
             ],
             "direction": [
                 "type": "string",
-                "description": "Optional creative direction, e.g. \"exploded view, brushed metal and glowing power path\". Use a new one for each rebuild.",
+                "description":
+                    "Optional creative direction, e.g. \"exploded view, brushed metal and glowing power path\". Use a new one for each rebuild.",
             ],
         ],
         "required": ["description"],
@@ -45,10 +47,10 @@ struct ModelTool: Tool {
         // Earlier builds this session, so a rebuild explores something new instead of reproducing the last one.
         let previous = ModelHistory.builds.suffix(4).map { "- \($0)" }.joined(separator: "\n")
         let prompt = """
-        Build: \(request)
-        \(direction.isEmpty ? "" : "Creative direction: \(direction)")
-        \(previous.isEmpty ? "" : "Already built this session (make this one clearly different unless the request says otherwise):\n\(previous)")
-        """
+            Build: \(request)
+            \(direction.isEmpty ? "" : "Creative direction: \(direction)")
+            \(previous.isEmpty ? "" : "Already built this session (make this one clearly different unless the request says otherwise):\n\(previous)")
+            """
         let window = ModelWindow.open()
         let started = Date()
         let build: Build
@@ -58,7 +60,10 @@ struct ModelTool: Tool {
             window.close()
             throw error
         }
-        Log.info("model", "built \(build.title) (\(build.concept)) from \(build.parts) parts, \(build.timing(since: started)), \(build.costSummary)")
+        Log.info(
+            "model",
+            "built \(build.title) (\(build.concept)) from \(build.parts) parts, \(build.timing(since: started)), \(build.costSummary)"
+        )
         guard build.parts > 0 else {
             window.close()
             throw ToolError.failed("The model builder returned no usable parts.")
@@ -69,23 +74,29 @@ struct ModelTool: Tool {
         if Config.value("DSHIFT_MODEL_POLISH") != "0" {
             window.polish = Task { await Self.polish(build, request: request, in: window) }
         }
-        return ToolOutput(text: "Showing \"\(build.title)\" (\(build.parts) parts) floating on the user's screen, with a polish pass still refining it. Design: \(build.concept)")
+        return ToolOutput(
+            text:
+                "Showing \"\(build.title)\" (\(build.parts) parts) floating on the user's screen, with a polish pass still refining it. Design: \(build.concept)"
+        )
     }
 
     /// Reviews a snapshot of the first build and streams fixes and detail into the same window.
     private static func polish(_ first: Build, request: String, in window: ModelWindow) async {
-        try? await Task.sleep(for: .milliseconds(400)) // let the last parts fade in before the snapshot
+        try? await Task.sleep(for: .milliseconds(400))  // let the last parts fade in before the snapshot
         guard !Task.isCancelled, let image = window.snapshotJPEG() else { return }
         let started = Date()
         let input = """
-        Request: \(request)
-        Your design concept: \(first.concept)
-        The attached image is your first build, rendered from the front. Its JSON Lines:
-        \(first.lines.joined(separator: "\n"))
-        """
+            Request: \(request)
+            Your design concept: \(first.concept)
+            The attached image is your first build, rendered from the front. Its JSON Lines:
+            \(first.lines.joined(separator: "\n"))
+            """
         do {
-            let pass = try await stream(instructions: instructions + polishInstructions, input: input, image: image, into: window)
-            Log.info("model", "polished \(first.title) with \(pass.parts) parts, \(pass.timing(since: started)), \(pass.costSummary)")
+            let pass = try await stream(
+                instructions: instructions + polishInstructions, input: input, image: image, into: window)
+            Log.info(
+                "model",
+                "polished \(first.title) with \(pass.parts) parts, \(pass.timing(since: started)), \(pass.costSummary)")
         } catch {
             Log.info("model", "polish failed: \(error.localizedDescription)")
         }
@@ -108,7 +119,9 @@ struct ModelTool: Tool {
     }
 
     /// Streams JSON Lines from Sol into `window`, adding each part the moment its line completes.
-    private static func stream(instructions: String, input: String, image: Data?, into window: ModelWindow) async throws -> Build {
+    private static func stream(instructions: String, input: String, image: Data?, into window: ModelWindow) async throws
+        -> Build
+    {
         var build = Build()
         var pending = ""
         let started = Date()
@@ -148,99 +161,99 @@ struct ModelTool: Tool {
     }
 
     private static let instructions = """
-    You are a 3D designer making a showpiece model for a native viewer, the kind of thing people screenshot and share. \
-    The model floats over the user's apps with no background, lit by soft studio lighting with reflections, shadows, \
-    and bloom on emissive parts.
+        You are a 3D designer making a showpiece model for a native viewer, the kind of thing people screenshot and share. \
+        The model floats over the user's apps with no background, lit by soft studio lighting with reflections, shadows, \
+        and bloom on emissive parts.
 
-    Before writing anything, decide the most striking and explanatory way to show the subject: a cutaway with the \
-    shell peeled back, an exploded view with parts floating apart along their axes, a translucent x-ray shell with \
-    glowing internals, a precise scientific illustration, a stylized low-poly sculpture, a blueprint built from thin \
-    glowing struts. Commit to one direction and execute it with craft:
-    - Accurate proportions and silhouette first; a viewer should recognize it before any label appears.
-    - Smooth, continuous forms. Build organic and curved shapes from lathes and tapered tubes, not stacks of spheres \
-    and capsules, which look lumpy. Join pieces so seams overlap rather than leaving gaps.
-    - Detail where it matters. 300 to 1500 parts is normal; repeat elements (bolts, ribs, teeth, atoms, panels) \
-    instead of leaving surfaces bare.
-    - A deliberate palette: two or three hues plus neutrals, not a rainbow. Contrast materials: brushed metal \
-    (metalness 0.9, roughness 0.3), matte (roughness 0.8), gloss (roughness 0.1), glass (opacity 0.25).
-    - Emission for energy, flow, heat, signal, or to make the key part pop. Bloom makes emissive parts glow.
-    - Make moving parts move: rotors, gears, orbits, flows.
+        Before writing anything, decide the most striking and explanatory way to show the subject: a cutaway with the \
+        shell peeled back, an exploded view with parts floating apart along their axes, a translucent x-ray shell with \
+        glowing internals, a precise scientific illustration, a stylized low-poly sculpture, a blueprint built from thin \
+        glowing struts. Commit to one direction and execute it with craft:
+        - Accurate proportions and silhouette first; a viewer should recognize it before any label appears.
+        - Smooth, continuous forms. Build organic and curved shapes from lathes and tapered tubes, not stacks of spheres \
+        and capsules, which look lumpy. Join pieces so seams overlap rather than leaving gaps.
+        - Detail where it matters. 300 to 1500 parts is normal; repeat elements (bolts, ribs, teeth, atoms, panels) \
+        instead of leaving surfaces bare.
+        - A deliberate palette: two or three hues plus neutrals, not a rainbow. Contrast materials: brushed metal \
+        (metalness 0.9, roughness 0.3), matte (roughness 0.8), gloss (roughness 0.1), glass (opacity 0.25).
+        - Emission for energy, flow, heat, signal, or to make the key part pop. Bloom makes emissive parts glow.
+        - Make moving parts move: rotors, gears, orbits, flows.
 
-    Output JSON Lines only: one complete JSON object per line, no prose, no markdown fences, no wrapping array. \
-    Each line appears the moment it arrives, so build in a satisfying order: silhouette and main masses first, then \
-    structure, then fine detail, then labels.
+        Output JSON Lines only: one complete JSON object per line, no prose, no markdown fences, no wrapping array. \
+        Each line appears the moment it arrives, so build in a satisfying order: silhouette and main masses first, then \
+        structure, then fine detail, then labels.
 
-    First line: {"title":"Short name","concept":"One sentence: your design direction, palette, and what it emphasizes"}
-    Give every major part a short unique "id" (like "torso", "left_wing", "blade_set") so it can be refined later.
+        First line: {"title":"Short name","concept":"One sentence: your design direction, palette, and what it emphasizes"}
+        Give every major part a short unique "id" (like "torso", "left_wing", "blade_set") so it can be refined later.
 
-    Positions are scene units with y up; keep the whole model within about -5..5 on every axis. Rotations are degrees.
-    {"shape":"sphere","position":[x,y,z],"radius":r}
-    {"shape":"box","position":[x,y,z],"size":[w,h,d],"rotation":[rx,ry,rz]}
-    {"shape":"cylinder","from":[x,y,z],"to":[x,y,z],"radius":r}   rods, shafts, struts, bonds
-    {"shape":"capsule","from":[x,y,z],"to":[x,y,z],"radius":r}   rounded rods, limbs, pills
-    {"shape":"cone","from":[x,y,z],"to":[x,y,z],"radius":r}   base at from, tip at to
-    {"shape":"torus","position":[x,y,z],"ringRadius":R,"pipeRadius":r,"rotation":[rx,ry,rz]}   flat in the xz plane before rotation
-    {"shape":"tube","points":[[x,y,z],...],"radius":r}   smooth curve through up to 200 points: strands, cables, \
-    orbits, flows, tails, horns, tentacles. Add "radii":[r,...] (one per point) to taper it: limbs, necks, tails
-    {"shape":"lathe","profile":[[radius,y],...],"position":[x,y,z],"rotation":[rx,ry,rz]}   a smooth surface of \
-    revolution around the local y axis, from a profile listed bottom to top: torsos, bodies, heads, vases, bottles, \
-    domes, fuselages, nose cones. Use 8 to 30 profile points for a smooth silhouette
-    {"shape":"extrude","points":[[x,y],...],"depth":d,"position":[x,y,z],"rotation":[rx,ry,rz]}   a 2D outline (in the \
-    xy plane, centered near 0,0) extruded along z: blades, airfoils, gear teeth, plates, brackets, letters
-    {"label":"Text","position":[x,y,z]}   small floating label; at most about 8, only where they explain something
+        Positions are scene units with y up; keep the whole model within about -5..5 on every axis. Rotations are degrees.
+        {"shape":"sphere","position":[x,y,z],"radius":r}
+        {"shape":"box","position":[x,y,z],"size":[w,h,d],"rotation":[rx,ry,rz]}
+        {"shape":"cylinder","from":[x,y,z],"to":[x,y,z],"radius":r}   rods, shafts, struts, bonds
+        {"shape":"capsule","from":[x,y,z],"to":[x,y,z],"radius":r}   rounded rods, limbs, pills
+        {"shape":"cone","from":[x,y,z],"to":[x,y,z],"radius":r}   base at from, tip at to
+        {"shape":"torus","position":[x,y,z],"ringRadius":R,"pipeRadius":r,"rotation":[rx,ry,rz]}   flat in the xz plane before rotation
+        {"shape":"tube","points":[[x,y,z],...],"radius":r}   smooth curve through up to 200 points: strands, cables, \
+        orbits, flows, tails, horns, tentacles. Add "radii":[r,...] (one per point) to taper it: limbs, necks, tails
+        {"shape":"lathe","profile":[[radius,y],...],"position":[x,y,z],"rotation":[rx,ry,rz]}   a smooth surface of \
+        revolution around the local y axis, from a profile listed bottom to top: torsos, bodies, heads, vases, bottles, \
+        domes, fuselages, nose cones. Use 8 to 30 profile points for a smooth silhouette
+        {"shape":"extrude","points":[[x,y],...],"depth":d,"position":[x,y,z],"rotation":[rx,ry,rz]}   a 2D outline (in the \
+        xy plane, centered near 0,0) extruded along z: blades, airfoils, gear teeth, plates, brackets, letters
+        {"label":"Text","position":[x,y,z]}   small floating label; at most about 8, only where they explain something
 
-    Materials: define each once, then reference it with "m" on shapes (keys on a shape override its material):
-    {"mat":"pearl","color":"#rrggbb","metalness":0.1,"roughness":0.35}   also "opacity" (0..1) and "emission":"#rrggbb"
-    {"shape":"sphere","position":[0,1,0],"radius":0.2,"m":"pearl"}
-    Use a handful of materials, declared up front, rather than repeating colors on every line.
+        Materials: define each once, then reference it with "m" on shapes (keys on a shape override its material):
+        {"mat":"pearl","color":"#rrggbb","metalness":0.1,"roughness":0.35}   also "opacity" (0..1) and "emission":"#rrggbb"
+        {"shape":"sphere","position":[0,1,0],"radius":0.2,"m":"pearl"}
+        Use a handful of materials, declared up front, rather than repeating colors on every line.
 
-    Repeats: any shape can take "repeat" to place copies, so write one line instead of many:
-    "repeat":{"count":3,"axis":[0,0,1],"pivot":[x,y,z]}   copies spread evenly around the axis through pivot (blades, \
-    teeth, bolts, spokes, petals); add "angle":90 to spread across 90 degrees instead of a full turn
-    "repeat":{"count":12,"step":[dx,dy,dz]}   copies offset by step each (rows of panels, rungs, vertebrae)
-    Shapes also take "group":"name".
-    Groups move together. Declare a group before its parts:
-    {"group":"rotor","pivot":[x,y,z],"spin":[ax,ay,az],"rps":0.3}   parts with "group":"rotor" spin around the axis \
-    through pivot, rps turns per second (0 for a static group). Keep spins calm: 0.05 to 0.5 rps.
+        Repeats: any shape can take "repeat" to place copies, so write one line instead of many:
+        "repeat":{"count":3,"axis":[0,0,1],"pivot":[x,y,z]}   copies spread evenly around the axis through pivot (blades, \
+        teeth, bolts, spokes, petals); add "angle":90 to spread across 90 degrees instead of a full turn
+        "repeat":{"count":12,"step":[dx,dy,dz]}   copies offset by step each (rows of panels, rungs, vertebrae)
+        Shapes also take "group":"name".
+        Groups move together. Declare a group before its parts:
+        {"group":"rotor","pivot":[x,y,z],"spin":[ax,ay,az],"rps":0.3}   parts with "group":"rotor" spin around the axis \
+        through pivot, rps turns per second (0 for a static group). Keep spins calm: 0.05 to 0.5 rps.
 
-    Playbooks. Use the one that fits; they apply to any subject in the category.
-    - Creatures and characters: lathe the torso, head, and snout; tapered tubes ("radii") for limbs, necks, tails, \
-    and fingers, overlapping into the body at joints; spheres only for eyes and joint caps. Check leg count, \
-    symmetry, and that feet touch one ground plane. Give the pose some life: weight on one leg, a turned head.
-    - Vehicles and machines: a lathe or box for the main hull, extrudes for fins, blades, brackets, and panels, \
-    cylinders for axles and pistons, repeats for wheels, bolts, vents, and teeth. Show function: a cutaway or \
-    exploded layer, and spin what spins.
-    - Architecture: massing first (boxes and extrudes), then repeated windows, columns, and ribs with "step"; a \
-    thin ground plate; warm emissive windows for life.
-    - Molecules and chemistry: CPK colors (C #3c3c3c, H #ffffff, O #e8322e, N #3050f8, S #ffd23f, P #ff8000), \
-    atoms scaled by element, bonds as cylinders, double bonds as two thin parallel cylinders; real geometry \
-    (tetrahedral 109.5, planar rings 120).
-    - Astronomy: compress distances and sizes but keep order and ratios readable; orbits as thin emissive tubes; \
-    a glowing star; rings as tori or flat extrudes.
-    - Anatomy and biology: lathes for organs and vessels, tapered tubes for branching structures, translucent \
-    outer layers over colored internals.
-    - Plants and nature: tapered tubes for stems and branches, extruded leaf and petal outlines repeated around an \
-    axis, slight random variation so it doesn't look printed.
-    - Products and objects: lathes for anything turned (cups, bottles, lenses), boxes with small chamfered details, \
-    one hero material.
-    - Math and data: tubes for curves, grids of thin tubes for surfaces, emissive color ramps for value.
+        Playbooks. Use the one that fits; they apply to any subject in the category.
+        - Creatures and characters: lathe the torso, head, and snout; tapered tubes ("radii") for limbs, necks, tails, \
+        and fingers, overlapping into the body at joints; spheres only for eyes and joint caps. Check leg count, \
+        symmetry, and that feet touch one ground plane. Give the pose some life: weight on one leg, a turned head.
+        - Vehicles and machines: a lathe or box for the main hull, extrudes for fins, blades, brackets, and panels, \
+        cylinders for axles and pistons, repeats for wheels, bolts, vents, and teeth. Show function: a cutaway or \
+        exploded layer, and spin what spins.
+        - Architecture: massing first (boxes and extrudes), then repeated windows, columns, and ribs with "step"; a \
+        thin ground plate; warm emissive windows for life.
+        - Molecules and chemistry: CPK colors (C #3c3c3c, H #ffffff, O #e8322e, N #3050f8, S #ffd23f, P #ff8000), \
+        atoms scaled by element, bonds as cylinders, double bonds as two thin parallel cylinders; real geometry \
+        (tetrahedral 109.5, planar rings 120).
+        - Astronomy: compress distances and sizes but keep order and ratios readable; orbits as thin emissive tubes; \
+        a glowing star; rings as tori or flat extrudes.
+        - Anatomy and biology: lathes for organs and vessels, tapered tubes for branching structures, translucent \
+        outer layers over colored internals.
+        - Plants and nature: tapered tubes for stems and branches, extruded leaf and petal outlines repeated around an \
+        axis, slight random variation so it doesn't look printed.
+        - Products and objects: lathes for anything turned (cups, bottles, lenses), boxes with small chamfered details, \
+        one hero material.
+        - Math and data: tubes for curves, grids of thin tubes for surfaces, emissive color ramps for value.
 
-    Speed matters: the user is watching it build. Use repeats and materials wherever they fit, write numbers with at \
-    most 2 decimals, and spend parts on what makes the model read well, not on invisible interior detail. \
-    Compute coordinates yourself (helices, rings, surfaces of revolution, airfoils).
-    """
+        Speed matters: the user is watching it build. Use repeats and materials wherever they fit, write numbers with at \
+        most 2 decimals, and spend parts on what makes the model read well, not on invisible interior detail. \
+        Compute coordinates yourself (helices, rings, surfaces of revolution, airfoils).
+        """
 
     private static let polishInstructions = """
 
 
-    Polish pass. You built the model below and can now see it rendered. The user is already looking at it, so \
-    improve it in place rather than starting over. Look hard at the image: proportions, silhouette, gaps between \
-    parts, floating or intersecting pieces, lumpy forms, missing defining features, flat or muddy materials, \
-    unreadable labels. Then output only JSON Lines that fix and enrich it:
-    - {"remove":"id"} deletes a part; a shape line with an existing "id" replaces that part.
-    - New parts, materials, and groups use the same format as before.
-    Prioritize the fixes a viewer would notice first. Don't repeat the title line. At most about 80 lines.
-    """
+        Polish pass. You built the model below and can now see it rendered. The user is already looking at it, so \
+        improve it in place rather than starting over. Look hard at the image: proportions, silhouette, gaps between \
+        parts, floating or intersecting pieces, lumpy forms, missing defining features, flat or muddy materials, \
+        unreadable labels. Then output only JSON Lines that fix and enrich it:
+        - {"remove":"id"} deletes a part; a shape line with an existing "id" replaces that part.
+        - New parts, materials, and groups use the same format as before.
+        Prioritize the fixes a viewer would notice first. Don't repeat the title line. At most about 80 lines.
+        """
 }
 
 /// Titles and design directions of the models built this session.
@@ -286,7 +299,8 @@ final class ModelWindow: NSObject {
             x: screen.frame.midX - Self.size / 2 + offset, y: screen.frame.midY - Self.size / 2 - offset,
             width: Self.size, height: Self.size
         )
-        window = ModelPanel(contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        window = ModelPanel(
+            contentRect: frame, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         // Above the sidebar (which floats at .floating), so a model can be dragged over it.
         window.level = NSWindow.Level(rawValue: NSWindow.Level.floating.rawValue + 1)
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
@@ -379,7 +393,8 @@ final class ModelWindow: NSObject {
         if let name = part["group"] as? String, let group = groups[name] {
             // Groups sit at their pivot, so parts given in model coordinates are shifted into the group's frame.
             node.position = SCNVector3(
-                node.position.x - group.position.x, node.position.y - group.position.y, node.position.z - group.position.z
+                node.position.x - group.position.x, node.position.y - group.position.y,
+                node.position.z - group.position.z
             )
             group.addChildNode(node)
         } else {
@@ -399,20 +414,23 @@ final class ModelWindow: NSObject {
         let axis = ModelPart.vector(spec["axis"])
         let step = ModelPart.vector(spec["step"]) ?? SCNVector3Zero
         let totalAngle = (spec["angle"] as? NSNumber)?.doubleValue ?? 360
-        let angleStep = (totalAngle >= 360 ? totalAngle / Double(count) : totalAngle / Double(max(count - 1, 1))) * .pi / 180
+        let angleStep =
+            (totalAngle >= 360 ? totalAngle / Double(count) : totalAngle / Double(max(count - 1, 1))) * .pi / 180
         for index in 0..<count {
             let copy = node.clone()
             if let axis, axis.x != 0 || axis.y != 0 || axis.z != 0 {
                 let spinner = SCNNode()
                 spinner.position = pivot
                 spinner.rotation = SCNVector4(axis.x, axis.y, axis.z, CGFloat(angleStep * Double(index)))
-                copy.position = SCNVector3(copy.position.x - pivot.x, copy.position.y - pivot.y, copy.position.z - pivot.z)
+                copy.position = SCNVector3(
+                    copy.position.x - pivot.x, copy.position.y - pivot.y, copy.position.z - pivot.z)
                 spinner.addChildNode(copy)
                 container.addChildNode(spinner)
             } else {
                 let offset = CGFloat(index)
                 copy.position = SCNVector3(
-                    copy.position.x + step.x * offset, copy.position.y + step.y * offset, copy.position.z + step.z * offset
+                    copy.position.x + step.x * offset, copy.position.y + step.y * offset,
+                    copy.position.z + step.z * offset
                 )
                 container.addChildNode(copy)
             }
@@ -422,7 +440,9 @@ final class ModelWindow: NSObject {
 
     /// A named set of parts that moves together, optionally spinning around an axis through its pivot.
     private func declareGroup(_ name: String, _ part: JSON) {
-        guard groups[name] == nil, let pivot = ModelPart.vector(part["pivot"]) ?? Optional(SCNVector3Zero) else { return }
+        guard groups[name] == nil, let pivot = ModelPart.vector(part["pivot"]) ?? Optional(SCNVector3Zero) else {
+            return
+        }
         let group = SCNNode()
         group.position = pivot
         model.addChildNode(group)
@@ -432,7 +452,8 @@ final class ModelWindow: NSObject {
             let length = sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z)
             guard length > 0 else { return }
             let spin = SCNAction.rotate(
-                by: .pi * 2, around: SCNVector3(axis.x / length, axis.y / length, axis.z / length), duration: 1 / turnsPerSecond
+                by: .pi * 2, around: SCNVector3(axis.x / length, axis.y / length, axis.z / length),
+                duration: 1 / turnsPerSecond
             )
             group.runAction(.repeatForever(spin))
         }
@@ -441,8 +462,8 @@ final class ModelWindow: NSObject {
     /// A soft studio backdrop for reflections: bright overhead, a warm horizon band, and a dark floor.
     private static let studioEnvironment: NSImage = {
         NSImage(size: NSSize(width: 256, height: 128), flipped: false) { rect in
-            NSGradient(colorsAndLocations:
-                (NSColor(white: 0.08, alpha: 1), 0),
+            NSGradient(
+                colorsAndLocations: (NSColor(white: 0.08, alpha: 1), 0),
                 (NSColor(white: 0.25, alpha: 1), 0.42),
                 (NSColor(srgbRed: 1, green: 0.93, blue: 0.85, alpha: 1), 0.52),
                 (NSColor(white: 0.55, alpha: 1), 0.62),
@@ -479,7 +500,8 @@ final class ModelWindow: NSObject {
     private func resize(by amount: CGFloat) {
         let frame = window.frame
         let side = min(max(frame.width * (1 + amount), 200), 1800)
-        window.setFrame(NSRect(x: frame.midX - side / 2, y: frame.midY - side / 2, width: side, height: side), display: true)
+        window.setFrame(
+            NSRect(x: frame.midX - side / 2, y: frame.midY - side / 2, width: side, height: side), display: true)
     }
 
     private func resetView() {
@@ -630,7 +652,8 @@ private enum ModelPart {
             return positioned(sphere, at: position, material: material)
         case "box":
             guard let position = vector(part["position"]), let size = vector(part["size"]) else { return nil }
-            let box = SCNBox(width: size.x, height: size.y, length: size.z, chamferRadius: min(size.x, size.y, size.z) * 0.08)
+            let box = SCNBox(
+                width: size.x, height: size.y, length: size.z, chamferRadius: min(size.x, size.y, size.z) * 0.08)
             return rotated(positioned(box, at: position, material: material), part["rotation"])
         case "capsule":
             guard let from = vector(part["from"]), let to = vector(part["to"]) else { return nil }
@@ -685,7 +708,8 @@ private enum ModelPart {
             let tube = SCNNode(geometry: Mesh.tube(through: points, radii: radii))
             tube.geometry?.materials = [material]
             // Rounded ends.
-            for (point, end) in [(points[0], radii[0]), (points[points.count - 1], radii[radii.count - 1])] where end > 0.005 {
+            for (point, end) in [(points[0], radii[0]), (points[points.count - 1], radii[radii.count - 1])]
+            where end > 0.005 {
                 let cap = SCNSphere(radius: end)
                 cap.segmentCount = 48
                 tube.addChildNode(positioned(cap, at: point, material: material))
@@ -714,11 +738,15 @@ private enum ModelPart {
     }
 
     /// A shape stretched between two points, for geometry that SceneKit builds along its y axis.
-    private static func span(from: SCNVector3, to: SCNVector3, material: SCNMaterial, make: (CGFloat) -> SCNGeometry) -> SCNNode? {
+    private static func span(from: SCNVector3, to: SCNVector3, material: SCNMaterial, make: (CGFloat) -> SCNGeometry)
+        -> SCNNode?
+    {
         let direction = SCNVector3(to.x - from.x, to.y - from.y, to.z - from.z)
         let length = sqrt(direction.x * direction.x + direction.y * direction.y + direction.z * direction.z)
         guard length > 0.0001 else { return nil }
-        let node = positioned(make(length), at: SCNVector3((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2), material: material)
+        let node = positioned(
+            make(length), at: SCNVector3((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2),
+            material: material)
         let isVertical = abs(direction.y) / length > 0.999
         node.look(at: to, up: isVertical ? SCNVector3(1, 0, 0) : SCNVector3(0, 1, 0), localFront: SCNVector3(0, 1, 0))
         return node
@@ -813,7 +841,8 @@ private enum Mesh {
         var vertices: [SCNVector3] = []
         var normals: [SCNVector3] = []
         for (index, point) in profile.enumerated() {
-            let previous = profile[max(index - 1, 0)], next = profile[min(index + 1, profile.count - 1)]
+            let previous = profile[max(index - 1, 0)]
+            let next = profile[min(index + 1, profile.count - 1)]
             let (dr, dy) = (next.x - previous.x, next.y - previous.y)
             let length = max(sqrt(dr * dr + dy * dy), 1e-6)
             for step in 0...segments {
@@ -826,17 +855,22 @@ private enum Mesh {
     }
 
     /// A tube swept along a Catmull-Rom curve through `points`, with radii interpolated between them.
-    static func tube(through points: [SCNVector3], radii: [CGFloat], sides: Int = 24, samplesPerSegment: Int = 8) -> SCNGeometry {
+    static func tube(through points: [SCNVector3], radii: [CGFloat], sides: Int = 24, samplesPerSegment: Int = 8)
+        -> SCNGeometry
+    {
         let control = points.map { SIMD3<Double>(Double($0.x), Double($0.y), Double($0.z)) }
         var centers: [SIMD3<Double>] = []
         var sampleRadii: [Double] = []
         for index in 0..<(control.count - 1) {
-            let p0 = control[max(index - 1, 0)], p1 = control[index], p2 = control[index + 1]
+            let p0 = control[max(index - 1, 0)]
+            let p1 = control[index]
+            let p2 = control[index + 1]
             let p3 = control[min(index + 2, control.count - 1)]
             let last = index == control.count - 2
             for step in 0..<(samplesPerSegment + (last ? 1 : 0)) {
                 let t = Double(step) / Double(samplesPerSegment)
-                let t2 = t * t, t3 = t2 * t
+                let t2 = t * t
+                let t3 = t2 * t
                 let a: SIMD3<Double> = 2 * p1
                 let b: SIMD3<Double> = p2 - p0
                 let c: SIMD3<Double> = 2 * p0 - 5 * p1 + 4 * p2 - p3
@@ -874,7 +908,8 @@ private enum Mesh {
         var indices: [UInt32] = []
         for ring in 0..<UInt32(max(rings - 1, 0)) {
             for step in 0..<UInt32(ringSize - 1) {
-                let a = ring * UInt32(ringSize) + step, b = a + UInt32(ringSize)
+                let a = ring * UInt32(ringSize) + step
+                let b = a + UInt32(ringSize)
                 indices += [a, b, a + 1, a + 1, b, b + 1]
             }
         }

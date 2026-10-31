@@ -4,46 +4,46 @@ import AppKit
 final class ChatModel: ObservableObject {
     private static let maxAgentIterations = 12
     private static let systemPrompt = """
-    You are a sidebar assistant on the user's Mac. Each user message starts with a <context> line naming the app and \
-    window the user is looking at. You don't see the window's contents until you ask for them.
+        You are a sidebar assistant on the user's Mac. Each user message starts with a <context> line naming the app and \
+        window the user is looking at. You don't see the window's contents until you ask for them.
 
-    Reading the screen: when the question is about what's on screen ("this", "here", "explain this page", anything \
-    referring to the window), call read_screen first. It returns the window's accessibility tree: lines indented by \
-    nesting with role plus quoted text, and "<- FOCUSED" on the focused element. Skip it for questions that don't \
-    need the screen (general knowledge, memory, web, follow-ups you can already answer). Ground on-screen answers in \
-    what it returned and quote exact text when useful. Call it again if the user says the screen changed. Be concise: this is a narrow sidebar, so prefer short paragraphs and lists.
+        Reading the screen: when the question is about what's on screen ("this", "here", "explain this page", anything \
+        referring to the window), call read_screen first. It returns the window's accessibility tree: lines indented by \
+        nesting with role plus quoted text, and "<- FOCUSED" on the focused element. Skip it for questions that don't \
+        need the screen (general knowledge, memory, web, follow-ups you can already answer). Ground on-screen answers in \
+        what it returned and quote exact text when useful. Call it again if the user says the screen changed. Be concise: this is a narrow sidebar, so prefer short paragraphs and lists.
 
-    The user can attach their own screenshots or images to a message; they arrive as images before the text. \
-    Treat them as what the user wants you to look at.
+        The user can attach their own screenshots or images to a message; they arrive as images before the text. \
+        Treat them as what the user wants you to look at.
 
-    Web: you can search the web (web_search) and read pages (web_fetch). Use them for anything current, \
-    factual, or outside what's on screen, and cite the pages you used with their URLs. Don't search for things the \
-    screen already answers.
+        Web: you can search the web (web_search) and read pages (web_fetch). Use them for anything current, \
+        factual, or outside what's on screen, and cite the pages you used with their URLs. Don't search for things the \
+        screen already answers.
 
-    Diagrams: when a picture would explain something better (flows, architectures, who-holds-what, sequences), \
-    call make_diagram with Mermaid source. Never draw ASCII diagrams; the sidebar's font isn't monospaced.
+        Diagrams: when a picture would explain something better (flows, architectures, who-holds-what, sequences), \
+        call make_diagram with Mermaid source. Never draw ASCII diagrams; the sidebar's font isn't monospaced.
 
-    Screenshots: read_screen is cheaper and usually enough. Call take_screenshot only when answering genuinely \
-    depends on visual information it lacks: images, charts, canvas or design apps, visual layout or styling, or a \
-    read_screen result that is empty or clearly missing the content the user is asking about.
+        Screenshots: read_screen is cheaper and usually enough. Call take_screenshot only when answering genuinely \
+        depends on visual information it lacks: images, charts, canvas or design apps, visual layout or styling, or a \
+        read_screen result that is empty or clearly missing the content the user is asking about.
 
-    Acting on the computer: when the user asks you to do something in their apps (send a message, fill in a form, \
-    navigate somewhere, organize files) and use_computer is available, call it with one complete, self-contained \
-    task. It runs in the background through Codex, which can't see this conversation, so include every detail it \
-    needs: app names, exact text, recipients, and when to stop. The user approves each task first. Never use it just \
-    to look at the screen, and report its result plainly, including anything it couldn't do.
+        Acting on the computer: when the user asks you to do something in their apps (send a message, fill in a form, \
+        navigate somewhere, organize files) and use_computer is available, call it with one complete, self-contained \
+        task. It runs in the background through Codex, which can't see this conversation, so include every detail it \
+        needs: app names, exact text, recipients, and when to stop. The user approves each task first. Never use it just \
+        to look at the screen, and report its result plainly, including anything it couldn't do.
 
-    Memory: you have a persistent memory of the user, a folder of markdown files. The <memory> block holds me.md \
-    (their profile) and the list of files. Treat it as your own background knowledge:
-    - Before answering anything that may depend on the user's people, projects, preferences, or history, search it \
-      with search_memory (for example `rg -n -i "acme" .`).
-    - When you learn something durable about the user (who they work with, what they're working on, how they like \
-      things written, stable preferences), save it with write_memory without asking. Put people in \
-      people/<name>.md, projects in projects/<name>.md, the user's own profile in me.md, and small facts in notes.md. \
-      Update existing files rather than duplicating.
-    - Don't save transient details, secrets, or anything the user asks you not to keep.
-    - Use memory silently. Don't announce searches or saves, and don't mention memory unless the user asks about it.
-    """
+        Memory: you have a persistent memory of the user, a folder of markdown files. The <memory> block holds me.md \
+        (their profile) and the list of files. Treat it as your own background knowledge:
+        - Before answering anything that may depend on the user's people, projects, preferences, or history, search it \
+          with search_memory (for example `rg -n -i "acme" .`).
+        - When you learn something durable about the user (who they work with, what they're working on, how they like \
+          things written, stable preferences), save it with write_memory without asking. Put people in \
+          people/<name>.md, projects in projects/<name>.md, the user's own profile in me.md, and small facts in notes.md. \
+          Update existing files rather than duplicating.
+        - Don't save transient details, secrets, or anything the user asks you not to keep.
+        - Use memory silently. Don't announce searches or saves, and don't mention memory unless the user asks about it.
+        """
 
     let id: UUID
     private let createdAt: Date
@@ -83,7 +83,10 @@ final class ChatModel: ObservableObject {
             entries = saved.entries.map { Self.transcriptEntry(from: $0, chat: saved.id) }
             apiMessages = ChatArchive.apiMessages(for: saved.id)
         }
-        var available: [Tool] = [ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), MemorySearchTool(), MemoryWriteTool(), DiagramTool(), ScratchpadTool()]
+        var available: [Tool] = [
+            ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), MemorySearchTool(), MemoryWriteTool(),
+            DiagramTool(), ScratchpadTool(),
+        ]
         if let codexPath = ComputerUseTool.locateCodex() {
             available.append(ComputerUseTool(codexPath: codexPath))
         }
@@ -138,7 +141,8 @@ final class ChatModel: ObservableObject {
             Log.info("appshot", "capture failed for \(app?.localizedName ?? "no app")")
             return
         }
-        attachment.source = Attachment.Source(appName: app?.localizedName ?? "Screen", windowTitle: windowTitle, icon: app?.icon)
+        attachment.source = Attachment.Source(
+            appName: app?.localizedName ?? "Screen", windowTitle: windowTitle, icon: app?.icon)
         attachments.append(attachment)
         focusRequest += 1
     }
@@ -221,9 +225,15 @@ final class ChatModel: ObservableObject {
         let firstReplyIndex = entries.count
         let content = userContent(for: question)
         let imageBlocks: [JSON] = attachments.flatMap { attachment -> [JSON] in
-            let image: JSON = ["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": attachment.jpeg.base64EncodedString()]]
+            let image: JSON = [
+                "type": "image",
+                "source": [
+                    "type": "base64", "media_type": "image/jpeg", "data": attachment.jpeg.base64EncodedString(),
+                ],
+            ]
             guard let source = attachment.source else { return [image] }
-            let label = source.windowTitle.isEmpty ? source.appName : "\(source.appName), window \"\(source.windowTitle)\""
+            let label =
+                source.windowTitle.isEmpty ? source.appName : "\(source.appName), window \"\(source.windowTitle)\""
             return [["type": "text", "text": "Appshot of \(label):"], image]
         }
         apiMessages.append(["role": "user", "content": imageBlocks + [["type": "text", "text": content]]])
@@ -250,9 +260,13 @@ final class ChatModel: ObservableObject {
             }
             appendNote("Stopped after \(Self.maxAgentIterations) steps.")
         } catch is CancellationError {
-            keepInterruptedTurn(since: checkpoint, userContent: imageBlocks + [["type": "text", "text": content]], firstReplyIndex: firstReplyIndex)
-        } catch where Task.isCancelled {
-            keepInterruptedTurn(since: checkpoint, userContent: imageBlocks + [["type": "text", "text": content]], firstReplyIndex: firstReplyIndex)
+            keepInterruptedTurn(
+                since: checkpoint, userContent: imageBlocks + [["type": "text", "text": content]],
+                firstReplyIndex: firstReplyIndex)
+        } catch  where Task.isCancelled {
+            keepInterruptedTurn(
+                since: checkpoint, userContent: imageBlocks + [["type": "text", "text": content]],
+                firstReplyIndex: firstReplyIndex)
         } catch {
             // Roll back to before this turn so the transcript never holds a tool_use without its result.
             apiMessages.removeSubrange(checkpoint...)
@@ -268,9 +282,17 @@ final class ChatModel: ObservableObject {
             .joined(separator: "\n\n")
         apiMessages.removeSubrange(checkpoint...)
         apiMessages.append(["role": "user", "content": userContent])
-        apiMessages.append(["role": "assistant", "content": [["type": "text", "text": partialReply.isEmpty
-            ? "(Interrupted by the user before answering.)"
-            : partialReply + "\n\n(Interrupted by the user.)"]]])
+        apiMessages.append([
+            "role": "assistant",
+            "content": [
+                [
+                    "type": "text",
+                    "text": partialReply.isEmpty
+                        ? "(Interrupted by the user before answering.)"
+                        : partialReply + "\n\n(Interrupted by the user.)",
+                ]
+            ],
+        ])
         appendNote("Stopped.")
     }
 
@@ -284,7 +306,9 @@ final class ChatModel: ObservableObject {
 
         Self.repairDanglingToolUses(&apiMessages)
         var serverCalls: [String: ToolCallEntry] = [:]
-        for try await event in ClaudeClient.stream(system: Self.systemPrompt, messages: apiMessages, tools: tools.definitions + Self.serverTools) {
+        for try await event in ClaudeClient.stream(
+            system: Self.systemPrompt, messages: apiMessages, tools: tools.definitions + Self.serverTools)
+        {
             message.apply(event)
             switch event {
             case .blockStart(let index, let block):
@@ -296,7 +320,8 @@ final class ChatModel: ObservableObject {
                     isStreamingText = true
                 case "tool_use":
                     isToolActive = true
-                    let entry = ToolCallEntry(toolUseID: block["id"] as? String ?? "", name: block["name"] as? String ?? "tool")
+                    let entry = ToolCallEntry(
+                        toolUseID: block["id"] as? String ?? "", name: block["name"] as? String ?? "tool")
                     toolEntries[index] = entry
                     toolCalls[entry.toolUseID] = entry
                     if (try? tools.tool(named: entry.name))?.isHidden != true {
@@ -305,7 +330,8 @@ final class ChatModel: ObservableObject {
                 // Dynamic filtering also emits internal code_execution calls; only search and fetch get a row.
                 case "server_tool_use" where ["web_search", "web_fetch"].contains(block["name"] as? String ?? ""):
                     // Web search and fetch run on Anthropic's side; the row only mirrors their progress.
-                    let entry = ToolCallEntry(toolUseID: block["id"] as? String ?? "", name: block["name"] as? String ?? "web")
+                    let entry = ToolCallEntry(
+                        toolUseID: block["id"] as? String ?? "", name: block["name"] as? String ?? "web")
                     toolEntries[index] = entry
                     serverCalls[entry.toolUseID] = entry
                     entries.append(.tool(entry))
@@ -347,11 +373,17 @@ final class ChatModel: ObservableObject {
         var results: [JSON] = []
         for block in message.blocks where block["type"] as? String == "tool_use" {
             let id = block["id"] as? String ?? ""
-            let entry = toolCalls.removeValue(forKey: id) ?? ToolCallEntry(toolUseID: id, name: block["name"] as? String ?? "tool")
-            let (output, isError) = await execute(block, entry: entry, inputIsValid: !message.invalidToolInputs.contains(id))
+            let entry =
+                toolCalls.removeValue(forKey: id)
+                ?? ToolCallEntry(toolUseID: id, name: block["name"] as? String ?? "tool")
+            let (output, isError) = await execute(
+                block, entry: entry, inputIsValid: !message.invalidToolInputs.contains(id))
             var content: [JSON] = [["type": "text", "text": output.text]]
             if let jpeg = output.jpeg {
-                content.append(["type": "image", "source": ["type": "base64", "media_type": "image/jpeg", "data": jpeg.base64EncodedString()]])
+                content.append([
+                    "type": "image",
+                    "source": ["type": "base64", "media_type": "image/jpeg", "data": jpeg.base64EncodedString()],
+                ])
             }
             results.append(["type": "tool_result", "tool_use_id": id, "content": content, "is_error": isError])
         }
@@ -376,31 +408,38 @@ final class ChatModel: ObservableObject {
             entry.status = .running
             // Its own task so the row's Stop button can cancel just this tool and let Claude carry on.
             let work = Task {
-                try await tool.run(input, progress: { [weak self] progress in
-                    entry.output = progress
-                    self?.scroll.tick += 1
-                }, requestAccess: { [weak self] app in
-                    if AutoMode.isOn {
-                        Log.info("auto", "allowed \(app) for this task")
-                        return .once
-                    }
-                    self?.scroll.tick += 1
-                    return await entry.requestAccess(app: app)
-                })
+                try await tool.run(
+                    input,
+                    progress: { [weak self] progress in
+                        entry.output = progress
+                        self?.scroll.tick += 1
+                    },
+                    requestAccess: { [weak self] app in
+                        if AutoMode.isOn {
+                            Log.info("auto", "allowed \(app) for this task")
+                            return .once
+                        }
+                        self?.scroll.tick += 1
+                        return await entry.requestAccess(app: app)
+                    })
             }
             entry.onCancel = {
                 work.cancel()
                 if entry.accessRequest != nil { entry.resolveAccess(.deny) }
             }
             defer { entry.onCancel = nil }
-            let output = try await withTaskCancellationHandler { try await work.value } onCancel: { work.cancel() }
+            let output = try await withTaskCancellationHandler {
+                try await work.value
+            } onCancel: {
+                work.cancel()
+            }
             Log.info("tool", "\(entry.name) ok: \(output.text.prefix(300))")
             entry.output = output.text
             entry.image = output.jpeg.flatMap(NSImage.init(data:))
             entry.status = .succeeded
             scroll.tick += 1
             return (output, false)
-        } catch where error is CancellationError || entry.isCancelRequested {
+        } catch  where error is CancellationError || entry.isCancelRequested {
             Log.info("tool", "\(entry.name) cancelled")
             entry.output = "Cancelled."
             entry.status = .cancelled
@@ -437,7 +476,8 @@ final class ChatModel: ObservableObject {
             }.joined(separator: "\n")
         } else if let fetched = result["content"] as? JSON {
             let document = fetched["content"] as? JSON
-            entry.output = [(document?["title"] as? String), fetched["url"] as? String].compactMap { $0 }.joined(separator: "\n")
+            entry.output = [(document?["title"] as? String), fetched["url"] as? String].compactMap { $0 }.joined(
+                separator: "\n")
         }
         entry.status = .succeeded
         Log.info("web", "\(entry.name) ok: \(entry.inputSummary)")
@@ -457,7 +497,8 @@ final class ChatModel: ObservableObject {
 
             let next = index + 1 < messages.count ? messages[index + 1] : nil
             var nextContent = next?["role"] as? String == "user" ? next?["content"] as? [JSON] ?? [] : []
-            let answered = Set(nextContent.compactMap { $0["type"] as? String == "tool_result" ? $0["tool_use_id"] as? String : nil })
+            let answered = Set(
+                nextContent.compactMap { $0["type"] as? String == "tool_result" ? $0["tool_use_id"] as? String : nil })
             let missing = toolUseIDs.filter { !answered.contains($0) }
             guard !missing.isEmpty else { continue }
 
@@ -504,9 +545,10 @@ final class ChatModel: ObservableObject {
         case .auto:
             AutoMode.isOn.toggle()
             autoModeChanged += 1
-            appendNote(AutoMode.isOn
-                ? "Auto mode on: computer use runs without asking. Shift+Tab or /auto to turn it off."
-                : "Auto mode off: computer use asks first.")
+            appendNote(
+                AutoMode.isOn
+                    ? "Auto mode on: computer use runs without asking. Shift+Tab or /auto to turn it off."
+                    : "Auto mode off: computer use asks first.")
         case .copy:
             let lastReply = entries.reversed().lazy.compactMap { entry -> String? in
                 if case .text(let text) = entry, text.role == .assistant, !text.text.hasPrefix("_") { return text.text }
@@ -558,19 +600,21 @@ final class ChatModel: ObservableObject {
             switch entry {
             case .text(let text):
                 allAttachments += text.attachments
-                savedEntries.append(SavedChat.Entry(
-                    kind: text.role == .user ? .user : .assistant,
-                    text: text.text,
-                    attachmentIDs: text.attachments.map(\.id)
-                ))
+                savedEntries.append(
+                    SavedChat.Entry(
+                        kind: text.role == .user ? .user : .assistant,
+                        text: text.text,
+                        attachmentIDs: text.attachments.map(\.id)
+                    ))
             case .tool(let call):
-                savedEntries.append(SavedChat.Entry(
-                    kind: .tool,
-                    text: call.output,
-                    toolName: call.name,
-                    toolInput: call.inputSummary,
-                    toolFailed: [.failed, .denied, .cancelled].contains(call.status)
-                ))
+                savedEntries.append(
+                    SavedChat.Entry(
+                        kind: .tool,
+                        text: call.output,
+                        toolName: call.name,
+                        toolInput: call.inputSummary,
+                        toolFailed: [.failed, .denied, .cancelled].contains(call.status)
+                    ))
             }
         }
         let chat = SavedChat(
@@ -584,7 +628,8 @@ final class ChatModel: ObservableObject {
         switch saved.kind {
         case .user, .assistant:
             let attachments = saved.attachmentIDs.compactMap { ChatArchive.attachment($0, in: chat) }
-            return .text(TextEntry(role: saved.kind == .user ? .user : .assistant, text: saved.text, attachments: attachments))
+            return .text(
+                TextEntry(role: saved.kind == .user ? .user : .assistant, text: saved.text, attachments: attachments))
         case .tool:
             let call = ToolCallEntry(toolUseID: "", name: saved.toolName ?? "tool")
             let inputData = Data((saved.toolInput ?? "").utf8)

@@ -5,7 +5,18 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check formatting and lint
+        run: ./scripts/format.sh --check
+
   build-and-test:
     runs-on: macos-15
     steps:

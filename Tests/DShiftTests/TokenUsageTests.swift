@@ -1,10 +1,13 @@
 import Testing
+
 @testable import DShift
 
 struct TokenUsageTests {
     @Test func laterUsageEventsOverwriteCumulativeCounts() {
         var usage = TokenUsage()
-        usage.merge(["input_tokens": 10, "cache_read_input_tokens": 900, "cache_creation_input_tokens": 90, "output_tokens": 1])
+        usage.merge([
+            "input_tokens": 10, "cache_read_input_tokens": 900, "cache_creation_input_tokens": 90, "output_tokens": 1,
+        ])
         usage.merge(["output_tokens": 250])
         #expect(usage.input == 10)
         #expect(usage.cacheRead == 900)

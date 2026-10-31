@@ -33,7 +33,9 @@ final class ResizeHandle: NSView {
     // window shadow and screenshots show square corners.
     override func draw(_ dirtyRect: NSRect) {
         if let panelBounds = superview?.bounds {
-            NSBezierPath(roundedRect: convert(panelBounds, from: superview), xRadius: cornerRadius, yRadius: cornerRadius).addClip()
+            NSBezierPath(
+                roundedRect: convert(panelBounds, from: superview), xRadius: cornerRadius, yRadius: cornerRadius
+            ).addClip()
         }
         NSColor(white: 0, alpha: 0.01).setFill()
         dirtyRect.fill()
@@ -45,7 +47,8 @@ final class ResizeHandle: NSView {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         trackingAreas.forEach(removeTrackingArea)
-        addTrackingArea(NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+        addTrackingArea(
+            NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
     }
 
     override func mouseEntered(with event: NSEvent) { cursor.set() }

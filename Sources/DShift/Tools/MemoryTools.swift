@@ -6,14 +6,16 @@ struct MemorySearchTool: Tool {
     let isHidden = true
     let name = "search_memory"
     let description = """
-    Search and read the user's memory folder (markdown files) with a read-only shell command run inside it: \
-    `rg -n -i "term" .`, `grep -rni "term" .`, `find . -name "*.md"`, `cat people/alex.md`. Allowed programs: rg, \
-    grep, find, ls, cat, head, tail, wc, tree, file, stat, piped together. Paths must be relative. No redirection, \
-    chaining, or substitution.
-    """
+        Search and read the user's memory folder (markdown files) with a read-only shell command run inside it: \
+        `rg -n -i "term" .`, `grep -rni "term" .`, `find . -name "*.md"`, `cat people/alex.md`. Allowed programs: rg, \
+        grep, find, ls, cat, head, tail, wc, tree, file, stat, piped together. Paths must be relative. No redirection, \
+        chaining, or substitution.
+        """
     let inputSchema: JSON = [
         "type": "object",
-        "properties": ["command": ["type": "string", "description": "A read-only command to run in the memory folder."]],
+        "properties": [
+            "command": ["type": "string", "description": "A read-only command to run in the memory folder."]
+        ],
         "required": ["command"],
         "additionalProperties": false,
     ]
@@ -36,10 +38,10 @@ struct MemoryWriteTool: Tool {
     let isHidden = true
     let name = "write_memory"
     let description = """
-    Save to the user's memory folder. `path` is relative, must end in .md, and folders are created as needed \
-    (for example people/alex-chen.md). mode "append" adds content to the end (default); "replace" overwrites the \
-    whole file, so read it first with search_memory and include everything worth keeping.
-    """
+        Save to the user's memory folder. `path` is relative, must end in .md, and folders are created as needed \
+        (for example people/alex-chen.md). mode "append" adds content to the end (default); "replace" overwrites the \
+        whole file, so read it first with search_memory and include everything worth keeping.
+        """
     let inputSchema: JSON = [
         "type": "object",
         "properties": [

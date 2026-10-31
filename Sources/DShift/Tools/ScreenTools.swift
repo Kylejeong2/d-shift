@@ -5,7 +5,8 @@ struct ReadScreenTool: Tool {
     let tracker: AppTracker
 
     let name = "read_screen"
-    let description = "Read the accessibility tree (all text and controls) of the app window the user is looking at. Call this before answering anything about what's on screen, and again when the screen may have changed."
+    let description =
+        "Read the accessibility tree (all text and controls) of the app window the user is looking at. Call this before answering anything about what's on screen, and again when the screen may have changed."
     let inputSchema: JSON = ["type": "object", "properties": [String: Any](), "additionalProperties": false]
     let maxCallsPerTurn: Int? = 3
 
@@ -25,11 +26,15 @@ struct ScreenshotTool: Tool {
 
     let maxCallsPerTurn: Int? = 1
     let name = "take_screenshot"
-    let description = "Capture a screenshot of the window the user is looking at, or of their whole screen. Last resort: only when the accessibility snapshot lacks the visual information needed to answer (images, charts, canvas or design apps, layout or styling). Limited to one per question."
+    let description =
+        "Capture a screenshot of the window the user is looking at, or of their whole screen. Last resort: only when the accessibility snapshot lacks the visual information needed to answer (images, charts, canvas or design apps, layout or styling). Limited to one per question."
     let inputSchema: JSON = [
         "type": "object",
         "properties": [
-            "scope": ["type": "string", "enum": ["window", "screen"], "description": "\"window\" (default) for the focused window, \"screen\" for the whole display."],
+            "scope": [
+                "type": "string", "enum": ["window", "screen"],
+                "description": "\"window\" (default) for the focused window, \"screen\" for the whole display.",
+            ]
         ],
         "additionalProperties": false,
     ]
@@ -38,7 +43,10 @@ struct ScreenshotTool: Tool {
     func run(_ input: JSON) async throws -> ToolOutput {
         guard CGPreflightScreenCaptureAccess() else {
             CGRequestScreenCaptureAccess()
-            return ToolOutput(text: "Screen Recording permission is not granted. Ask the user to enable it in System Settings > Privacy & Security > Screen Recording, then relaunch the sidebar.")
+            return ToolOutput(
+                text:
+                    "Screen Recording permission is not granted. Ask the user to enable it in System Settings > Privacy & Security > Screen Recording, then relaunch the sidebar."
+            )
         }
 
         let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
@@ -46,7 +54,8 @@ struct ScreenshotTool: Tool {
         let appWindows = content.windows.filter {
             $0.owningApplication?.processID == pid && $0.windowLayer == 0 && $0.frame.width > 50 && $0.frame.height > 50
         }
-        let window = appWindows.first { $0.title == tracker.windowTitle && !tracker.windowTitle.isEmpty }
+        let window =
+            appWindows.first { $0.title == tracker.windowTitle && !tracker.windowTitle.isEmpty }
             ?? appWindows.max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
 
         let filter: SCContentFilter
@@ -57,7 +66,8 @@ struct ScreenshotTool: Tool {
             frame = window.frame
             description = "Window \"\(window.title ?? "")\" of \(tracker.app?.localizedName ?? "the app")"
         } else {
-            let display = content.displays.first { $0.frame.contains(window?.frame.origin ?? .zero) } ?? content.displays.first
+            let display =
+                content.displays.first { $0.frame.contains(window?.frame.origin ?? .zero) } ?? content.displays.first
             guard let display else { return ToolOutput(text: "No display found.") }
             // The sidebar shows up in user screenshots, but Claude's own screenshots leave it out.
             let ownWindows = content.windows.filter { $0.owningApplication?.processID == getpid() }
@@ -73,7 +83,10 @@ struct ScreenshotTool: Tool {
         configuration.showsCursor = false
 
         let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
-        guard let jpeg = NSBitmapImageRep(cgImage: image).representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else {
+        guard
+            let jpeg = NSBitmapImageRep(cgImage: image).representation(
+                using: .jpeg, properties: [.compressionFactor: 0.8])
+        else {
             return ToolOutput(text: "Failed to encode the screenshot.")
         }
         return ToolOutput(text: "\(description), \(image.width)x\(image.height).", jpeg: jpeg)

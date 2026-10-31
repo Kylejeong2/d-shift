@@ -26,7 +26,9 @@ final class ModifierChordMonitor {
             return
         }
 
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([
+            .capsLock, .numericPad, .function,
+        ])
         if flags.isEmpty {
             if !isCancelled, let start = chordStartedAt, event.timestamp - start < Self.maxHoldDuration {
                 onTrigger()
@@ -34,7 +36,7 @@ final class ModifierChordMonitor {
             chordStartedAt = nil
             isCancelled = false
         } else if !Self.chord.isSuperset(of: flags) {
-            cancel() // Cmd or Option joined in
+            cancel()  // Cmd or Option joined in
         } else if flags == Self.chord, chordStartedAt == nil, !isCancelled {
             chordStartedAt = event.timestamp
         }

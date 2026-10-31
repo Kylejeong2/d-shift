@@ -5,15 +5,21 @@ final class EventMonitor {
     private var monitors: [Any] = []
 
     init(matching mask: NSEvent.EventTypeMask, handler: @escaping @MainActor (NSEvent) -> Void) {
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { event in
-            MainActor.assumeIsolated { handler(event) }
-        }) {
+        if let global = NSEvent.addGlobalMonitorForEvents(
+            matching: mask,
+            handler: { event in
+                MainActor.assumeIsolated { handler(event) }
+            })
+        {
             monitors.append(global)
         }
-        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { event in
-            MainActor.assumeIsolated { handler(event) }
-            return event
-        }) {
+        if let local = NSEvent.addLocalMonitorForEvents(
+            matching: mask,
+            handler: { event in
+                MainActor.assumeIsolated { handler(event) }
+                return event
+            })
+        {
             monitors.append(local)
         }
     }

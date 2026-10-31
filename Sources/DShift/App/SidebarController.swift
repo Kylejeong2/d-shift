@@ -58,7 +58,8 @@ final class SidebarController {
         // Behind-window blur ignores layer corner masks, so without a mask image its square corners poke out.
         backdrop.maskImage = Self.roundedMask
 
-        let hosting = NSHostingView(rootView: SidebarView(store: store, onClose: { [weak panel] in panel?.orderOut(nil) }))
+        let hosting = NSHostingView(
+            rootView: SidebarView(store: store, onClose: { [weak panel] in panel?.orderOut(nil) }))
         store.onLastChatClosed = { [weak panel] in panel?.orderOut(nil) }
         for view in [backdrop, hosting] as [NSView] {
             container.addPinnedSubview(view)
@@ -138,12 +139,13 @@ final class SidebarController {
         let height = min(max(savedHeight > 0 ? savedHeight : maxHeight, Self.minSize.height), maxHeight)
         let savedTopInset = defaults.object(forKey: Self.topInsetKey) as? Double ?? Self.edgeInset
         let topInset = min(max(savedTopInset, 0), visible.height - height)
-        panel.setFrame(NSRect(
-            x: visible.maxX - width - Self.edgeInset,
-            y: visible.maxY - topInset - height,
-            width: width,
-            height: height
-        ), display: true)
+        panel.setFrame(
+            NSRect(
+                x: visible.maxX - width - Self.edgeInset,
+                y: visible.maxY - topInset - height,
+                width: width,
+                height: height
+            ), display: true)
         panel.makeKeyAndOrderFront(nil)
         panel.invalidateShadow()
         store.selected.focusRequest += 1

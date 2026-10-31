@@ -16,9 +16,11 @@ enum Memory {
     private static let maxListedFiles = 200
 
     static func overview() -> String {
-        let profile = (try? String(contentsOf: Storage.memoryDir.appendingPathComponent("me.md"), encoding: .utf8)) ?? ""
+        let profile =
+            (try? String(contentsOf: Storage.memoryDir.appendingPathComponent("me.md"), encoding: .utf8)) ?? ""
         let files = markdownFiles()
-        let listing = files.prefix(maxListedFiles).joined(separator: "\n")
+        let listing =
+            files.prefix(maxListedFiles).joined(separator: "\n")
             + (files.count > maxListedFiles ? "\n(\(files.count - maxListedFiles) more)" : "")
         return "## me.md\n\(profile)\n\n## Files\n\(listing)"
     }
@@ -39,7 +41,8 @@ enum Memory {
 
     private static func markdownFiles() -> [String] {
         let root = Storage.memoryDir.standardizedFileURL.path + "/"
-        guard let enumerator = FileManager.default.enumerator(at: Storage.memoryDir, includingPropertiesForKeys: nil) else { return [] }
+        guard let enumerator = FileManager.default.enumerator(at: Storage.memoryDir, includingPropertiesForKeys: nil)
+        else { return [] }
         return enumerator.compactMap { $0 as? URL }
             .filter { $0.pathExtension == "md" }
             .map { $0.standardizedFileURL.path.replacingOccurrences(of: root, with: "") }
@@ -62,7 +65,8 @@ enum ChatHistory {
         let file = Storage.historyDir.appendingPathComponent("\(day).jsonl")
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        guard var data = try? encoder.encode(Entry(timestamp: Date(), role: role, text: text, app: app, chat: chat)) else { return }
+        guard var data = try? encoder.encode(Entry(timestamp: Date(), role: role, text: text, app: app, chat: chat))
+        else { return }
         data.append(0x0A)
         if let handle = try? FileHandle(forWritingTo: file) {
             defer { try? handle.close() }
@@ -84,8 +88,8 @@ enum MemoryPath {
         let url = root.appendingPathComponent(trimmed).standardizedFileURL
         let resolvedRoot = root.resolvingSymlinksInPath().path
         guard url.pathExtension == "md",
-              url.path.hasPrefix(root.path + "/"),
-              url.deletingLastPathComponent().resolvingSymlinksInPath().path.hasPrefix(resolvedRoot)
+            url.path.hasPrefix(root.path + "/"),
+            url.deletingLastPathComponent().resolvingSymlinksInPath().path.hasPrefix(resolvedRoot)
         else { return nil }
         return url.path
     }

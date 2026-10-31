@@ -22,7 +22,7 @@ final class DoubleShiftMonitor {
 
     private func handle(_ event: NSEvent) {
         guard event.type == .flagsChanged,
-              event.keyCode == Self.leftShiftKeyCode || event.keyCode == Self.rightShiftKeyCode
+            event.keyCode == Self.leftShiftKeyCode || event.keyCode == Self.rightShiftKeyCode
         else {
             reset()
             return

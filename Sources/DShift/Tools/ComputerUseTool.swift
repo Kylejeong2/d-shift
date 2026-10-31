@@ -8,16 +8,16 @@ struct ComputerUseTool: Tool {
 
     let name = "use_computer"
     let description = """
-    Have Codex, OpenAI's computer-use agent, operate apps on the user's Mac in the background to complete a task: \
-    clicking, typing, and navigating in other apps. The agent can't see this conversation, so `task` must be \
-    complete and self-contained. Use only when the user asks you to do something in their apps, not to read the \
-    screen. Codex refuses terminal apps (Ghostty, Terminal, iTerm) for safety, so don't use it for those; tell the \
-    user how to do it instead. Returns Codex's summary of what it did.
-    """
+        Have Codex, OpenAI's computer-use agent, operate apps on the user's Mac in the background to complete a task: \
+        clicking, typing, and navigating in other apps. The agent can't see this conversation, so `task` must be \
+        complete and self-contained. Use only when the user asks you to do something in their apps, not to read the \
+        screen. Codex refuses terminal apps (Ghostty, Terminal, iTerm) for safety, so don't use it for those; tell the \
+        user how to do it instead. Returns Codex's summary of what it did.
+        """
     let inputSchema: JSON = [
         "type": "object",
         "properties": [
-            "task": ["type": "string", "description": "The full task, with every detail needed and when to stop."],
+            "task": ["type": "string", "description": "The full task, with every detail needed and when to stop."]
         ],
         "required": ["task"],
         "additionalProperties": false,
@@ -36,7 +36,8 @@ struct ComputerUseTool: Tool {
         requestAccess: @escaping (String) async -> AppAccess
     ) async throws -> ToolOutput {
         let task = input["task"] as? String ?? ""
-        let result = try await CodexRunner.run(task: task, codexPath: codexPath, progress: progress, requestAccess: requestAccess)
+        let result = try await CodexRunner.run(
+            task: task, codexPath: codexPath, progress: progress, requestAccess: requestAccess)
         return ToolOutput(text: result)
     }
 
@@ -122,15 +123,19 @@ enum CodexRunner {
 
         return try await withTaskCancellationHandler {
             var log = CodexEventLog()
-            let initializeID = request("initialize", [
-                "clientInfo": ["name": "dshift", "title": "D-Shift", "version": "1"],
-                "capabilities": NSNull(),
-            ])
+            let initializeID = request(
+                "initialize",
+                [
+                    "clientInfo": ["name": "dshift", "title": "D-Shift", "version": "1"],
+                    "capabilities": NSNull(),
+                ])
             var threadStartID = -1
 
             for try await line in stdout.fileHandleForReading.bytes.lines {
                 events.write(Data((line + "\n").utf8))
-                guard let message = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? JSON else { continue }
+                guard let message = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? JSON else {
+                    continue
+                }
                 let method = message["method"] as? String
                 let id = message["id"]
 
@@ -140,26 +145,33 @@ enum CodexRunner {
                 if let method, let id {
                     // A request from the server: answer it or Codex waits forever.
                     let params = message["params"] as? JSON ?? [:]
-                    send(["jsonrpc": "2.0", "id": id, "result": await answer(method, params, log: &log, requestAccess: requestAccess)])
+                    send([
+                        "jsonrpc": "2.0", "id": id,
+                        "result": await answer(method, params, log: &log, requestAccess: requestAccess),
+                    ])
                     progress(log.progressText)
                     continue
                 }
                 if let id = id as? Int, let result = message["result"] as? JSON {
                     if id == initializeID {
                         send(["jsonrpc": "2.0", "method": "initialized"])
-                        threadStartID = request("thread/start", [
-                            "cwd": workDir.path,
-                            // read-only: Codex can't run shell commands that write. Computer use goes through its own service.
-                            "sandbox": "read-only",
-                            "approvalPolicy": "on-request",
-                            "ephemeral": true,
-                            "developerInstructions": prompt,
-                        ])
+                        threadStartID = request(
+                            "thread/start",
+                            [
+                                "cwd": workDir.path,
+                                // read-only: Codex can't run shell commands that write. Computer use goes through its own service.
+                                "sandbox": "read-only",
+                                "approvalPolicy": "on-request",
+                                "ephemeral": true,
+                                "developerInstructions": prompt,
+                            ])
                     } else if id == threadStartID, let threadID = (result["thread"] as? JSON)?["id"] as? String {
-                        _ = request("turn/start", [
-                            "threadId": threadID,
-                            "input": [["type": "text", "text": task, "text_elements": [Any]()]],
-                        ])
+                        _ = request(
+                            "turn/start",
+                            [
+                                "threadId": threadID,
+                                "input": [["type": "text", "text": task, "text_elements": [Any]()]],
+                            ])
                     }
                     continue
                 }
@@ -171,7 +183,10 @@ enum CodexRunner {
                 if log.isDone { break }
             }
 
-            Log.info("codex", "done failure=\(log.failure ?? "none") blocked=\(log.blockedApps) final=\(log.finalMessage?.prefix(300) ?? "none")")
+            Log.info(
+                "codex",
+                "done failure=\(log.failure ?? "none") blocked=\(log.blockedApps) final=\(log.finalMessage?.prefix(300) ?? "none")"
+            )
             if let failure = log.failure { throw ToolError.failed("Codex failed: \(failure)") }
             if let message = log.finalMessage { return log.withBlockedNote(message) }
             if Task.isCancelled { throw CancellationError() }
@@ -214,12 +229,12 @@ enum CodexRunner {
     }
 
     private static let prompt = """
-    You are operating the user's Mac on behalf of D-Shift, their sidebar assistant. Use computer use to complete \
-    the task, working in the background without taking over the user's foreground app when possible. Do only what \
-    the task asks. If a step is ambiguous, or would send, buy, delete, or share something beyond what the task \
-    states, stop and explain instead of guessing. End with a short summary of what you did and what, if anything, \
-    is left.
-    """
+        You are operating the user's Mac on behalf of D-Shift, their sidebar assistant. Use computer use to complete \
+        the task, working in the background without taking over the user's foreground app when possible. Do only what \
+        the task asks. If a step is ambiguous, or would send, buy, delete, or share something beyond what the task \
+        states, stop and explain instead of guessing. End with a short summary of what you did and what, if anything, \
+        is left.
+        """
 }
 
 /// Tears down a `codex app-server` run completely. Each run spawns about 15 processes (a login shell, the Computer
@@ -339,7 +354,8 @@ struct CodexEventLog {
             }
             return false
         case ("error", _):
-            failure = (params["error"] as? JSON)?["message"] as? String ?? params["message"] as? String ?? "unknown error"
+            failure =
+                (params["error"] as? JSON)?["message"] as? String ?? params["message"] as? String ?? "unknown error"
         default:
             return false
         }
@@ -354,7 +370,9 @@ struct CodexEventLog {
 
     /// "Allow Computer Use to use \"Slack\"?" -> "Slack"
     static func appName(inApprovalPrompt message: String) -> String? {
-        guard let open = message.firstIndex(of: "\""), let close = message[message.index(after: open)...].firstIndex(of: "\"") else {
+        guard let open = message.firstIndex(of: "\""),
+            let close = message[message.index(after: open)...].firstIndex(of: "\"")
+        else {
             return nil
         }
         return String(message[message.index(after: open)..<close])

@@ -41,10 +41,12 @@ private struct APIKeySetupView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Add your Anthropic API key")
                 .scaledFont(15, weight: .semibold)
-            Text("D-Shift sends your questions and screen context to Claude using your own key. The key is stored in your macOS Keychain.")
-                .scaledFont(12)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                "D-Shift sends your questions and screen context to Claude using your own key. The key is stored in your macOS Keychain."
+            )
+            .scaledFont(12)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
             SecureField("sk-ant-...", text: $key)
                 .textFieldStyle(.plain)
                 .scaledFont(13)
@@ -233,15 +235,19 @@ private struct TranscriptView: View {
                             }
                             .transition(.fadeUp)
                         }
-                        if model.isRunning && !model.isStreamingText && !model.isToolActive, let startedAt = model.turnStartedAt {
+                        if model.isRunning && !model.isStreamingText && !model.isToolActive,
+                            let startedAt = model.turnStartedAt
+                        {
                             ThinkingRow(startedAt: startedAt)
                         }
                         Color.clear
                             .frame(height: 1)
                             .id(bottomID)
-                            .background(GeometryReader { marker in
-                                Color.clear.preference(key: BottomOffsetKey.self, value: marker.frame(in: .named(scrollSpace)).maxY)
-                            })
+                            .background(
+                                GeometryReader { marker in
+                                    Color.clear.preference(
+                                        key: BottomOffsetKey.self, value: marker.frame(in: .named(scrollSpace)).maxY)
+                                })
                     }
                     .padding(14)
                     .animation(.fadeUp, value: model.entries.count)
@@ -287,16 +293,23 @@ private struct UsageBar: View {
                 ContextMeter(fraction: usage.contextFraction)
                 Text("\(Self.percent(usage.contextFraction)) context")
             }
-            .help("\(usage.contextTokens.formatted()) of \(ChatUsage.contextWindow.formatted()) tokens in the last request")
+            .help(
+                "\(usage.contextTokens.formatted()) of \(ChatUsage.contextWindow.formatted()) tokens in the last request"
+            )
             Text("\(Self.compact(usage.totals.input + usage.totals.cacheRead + usage.totals.cacheWrite)) in")
             Text("\(Self.compact(usage.totals.output)) out")
             if usage.requests > 0 {
                 Text("\(Self.percent(usage.cacheHitRate)) cached")
-                    .help("Cache reads \(usage.totals.cacheRead.formatted()), writes \(usage.totals.cacheWrite.formatted())")
+                    .help(
+                        "Cache reads \(usage.totals.cacheRead.formatted()), writes \(usage.totals.cacheWrite.formatted())"
+                    )
             }
             Spacer(minLength: 0)
-            Text(usage.estimatedCost, format: .currency(code: "USD").precision(.fractionLength(usage.estimatedCost < 1 ? 3 : 2)))
-                .help("Estimated at Opus 5.5 list prices over \(usage.requests) requests")
+            Text(
+                usage.estimatedCost,
+                format: .currency(code: "USD").precision(.fractionLength(usage.estimatedCost < 1 ? 3 : 2))
+            )
+            .help("Estimated at Opus 5.5 list prices over \(usage.requests) requests")
         }
         .scaledFont(10)
         .monospacedDigit()
@@ -307,7 +320,8 @@ private struct UsageBar: View {
     }
 
     private static func percent(_ fraction: Double) -> String {
-        fraction > 0 && fraction < 0.001 ? "<0.1%" : fraction.formatted(.percent.precision(.fractionLength(fraction < 0.1 ? 1 : 0)))
+        fraction > 0 && fraction < 0.001
+            ? "<0.1%" : fraction.formatted(.percent.precision(.fractionLength(fraction < 0.1 ? 1 : 0)))
     }
 
     private static func compact(_ tokens: Int) -> String {
@@ -448,7 +462,8 @@ private struct TextRow: View {
                         let isLast = index == segments.count - 1
                         switch segment {
                         case .prose(let text):
-                            (Text(Self.markdown(text)) + Text(entry.isStreaming && isLast ? " ▍" : "").foregroundColor(.secondary))
+                            (Text(Self.markdown(text))
+                                + Text(entry.isStreaming && isLast ? " ▍" : "").foregroundColor(.secondary))
                                 .scaledFont(13)
                                 .lineSpacing(2)
                         case .code(let code):
@@ -456,12 +471,12 @@ private struct TextRow: View {
                         }
                     }
                 }
-                    .textSelection(.enabled)
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Theme.surfaceFill, in: Theme.surfaceShape)
-                    .overlay(Theme.surfaceShape.strokeBorder(Theme.stroke))
+                .textSelection(.enabled)
+                .padding(.horizontal, 11)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.surfaceFill, in: Theme.surfaceShape)
+                .overlay(Theme.surfaceShape.strokeBorder(Theme.stroke))
                 if !entry.isStreaming, !entry.text.isEmpty, !entry.text.hasPrefix("_") {
                     MessageActions(text: entry.text)
                         .transition(.opacity)
@@ -480,7 +495,6 @@ private struct TextRow: View {
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
 }
-
 
 private struct QueueView: View {
     @ObservedObject var model: ChatModel
@@ -544,7 +558,8 @@ private struct InputBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if !commandMatches.isEmpty {
-                CommandMenu(commands: commandMatches, highlighted: min(highlighted, commandMatches.count - 1)) { command in
+                CommandMenu(commands: commandMatches, highlighted: min(highlighted, commandMatches.count - 1)) {
+                    command in
                     model.input = command.name
                     submit()
                 }
@@ -558,7 +573,9 @@ private struct InputBar: View {
             }
             .padding(10)
             .background(Theme.surfaceFill, in: Theme.surfaceShape)
-            .overlay(Theme.surfaceShape.strokeBorder(isDropTargeted ? Color.accentColor : AutoMode.isOn ? Color.orange.opacity(0.5) : Theme.stroke))
+            .overlay(
+                Theme.surfaceShape.strokeBorder(
+                    isDropTargeted ? Color.accentColor : AutoMode.isOn ? Color.orange.opacity(0.5) : Theme.stroke))
             AutoModeHint(model: model)
         }
         .animation(.fadeUp, value: commandMatches)
@@ -573,33 +590,36 @@ private struct InputBar: View {
 
     private var field: some View {
         HStack(spacing: 8) {
-            TextField(model.isRunning ? "Queue a message, or Cmd+Return to send now" : "Ask about your screen...", text: $model.input, axis: .vertical)
-                .textFieldStyle(.plain)
-                .scaledFont(13)
-                .lineLimit(1...6)
-                .focused($isFocused)
-                .onKeyPress(.return, phases: .down) { press in
-                    guard press.modifiers.contains(.command) else { return .ignored }
-                    model.sendNow()
-                    return .handled
-                }
-                .onKeyPress(.downArrow) { moveHighlight(1) }
-                .onKeyPress(.upArrow) { moveHighlight(-1) }
-                // Shift+Tab can arrive as backtab (U+0019) rather than Tab with Shift.
-                .onKeyPress(KeyEquivalent("\u{19}"), phases: .down) { _ in
+            TextField(
+                model.isRunning ? "Queue a message, or Cmd+Return to send now" : "Ask about your screen...",
+                text: $model.input, axis: .vertical
+            )
+            .textFieldStyle(.plain)
+            .scaledFont(13)
+            .lineLimit(1...6)
+            .focused($isFocused)
+            .onKeyPress(.return, phases: .down) { press in
+                guard press.modifiers.contains(.command) else { return .ignored }
+                model.sendNow()
+                return .handled
+            }
+            .onKeyPress(.downArrow) { moveHighlight(1) }
+            .onKeyPress(.upArrow) { moveHighlight(-1) }
+            // Shift+Tab can arrive as backtab (U+0019) rather than Tab with Shift.
+            .onKeyPress(KeyEquivalent("\u{19}"), phases: .down) { _ in
+                model.toggleAutoMode()
+                return .handled
+            }
+            .onKeyPress(.tab, phases: .down) { press in
+                if press.modifiers.contains(.shift) {
                     model.toggleAutoMode()
                     return .handled
                 }
-                .onKeyPress(.tab, phases: .down) { press in
-                    if press.modifiers.contains(.shift) {
-                        model.toggleAutoMode()
-                        return .handled
-                    }
-                    guard let command = highlightedCommand else { return .ignored }
-                    model.input = command.name
-                    return .handled
-                }
-                .onSubmit(submit)
+                guard let command = highlightedCommand else { return .ignored }
+                model.input = command.name
+                return .handled
+            }
+            .onSubmit(submit)
             // Backup for Cmd+Return in case the field consumes the key press first; a second call finds empty input.
             ShortcutKey(.return, action: model.sendNow)
             ShortcutKey("v", action: pasteImageOrText)
@@ -709,7 +729,9 @@ private struct CommandMenu: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             ForEach(Array(commands.enumerated()), id: \.element) { index, command in
-                Button { onChoose(command) } label: {
+                Button {
+                    onChoose(command)
+                } label: {
                     HStack(spacing: 10) {
                         Text(command.name)
                             .scaledFont(12, weight: .semibold, design: .monospaced)
@@ -754,7 +776,10 @@ private struct AutoModeHint: View {
         }
         .buttonStyle(.plain)
         .id(model.autoModeChanged)
-        .help(isOn ? "Computer use runs without asking. Click or /auto to turn off." : "Click or /auto to always allow computer use.")
+        .help(
+            isOn
+                ? "Computer use runs without asking. Click or /auto to turn off."
+                : "Click or /auto to always allow computer use.")
     }
 }
 
@@ -769,13 +794,20 @@ private struct SendControls: View {
         HStack(spacing: 6) {
             if model.isRunning {
                 if hasDraft {
-                    pill("Queue", systemName: "text.append", help: "Send after the current reply (Return)", action: model.send)
-                    pill("Send now", systemName: "bolt.fill", help: "Interrupt and send this now (Cmd+Return)", action: model.sendNow)
+                    pill(
+                        "Queue", systemName: "text.append", help: "Send after the current reply (Return)",
+                        action: model.send)
+                    pill(
+                        "Send now", systemName: "bolt.fill", help: "Interrupt and send this now (Cmd+Return)",
+                        action: model.sendNow)
                 }
                 round("stop.fill", help: "Stop", tint: .white.opacity(0.18), action: model.stop)
             } else {
-                round("arrow.up", help: "Send (Return)", tint: hasDraft ? .accentColor : .white.opacity(0.12), action: model.send)
-                    .disabled(!hasDraft)
+                round(
+                    "arrow.up", help: "Send (Return)", tint: hasDraft ? .accentColor : .white.opacity(0.12),
+                    action: model.send
+                )
+                .disabled(!hasDraft)
             }
         }
         .animation(.fadeUp, value: model.isRunning)
@@ -819,8 +851,11 @@ private struct AttachmentThumbnails: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 ForEach(attachments) { attachment in
-                    AttachmentChip(attachment: attachment, size: size, onRemove: onRemove.map { remove in { remove(attachment.id) } })
-                        .transition(.scale(scale: 0.85).combined(with: .opacity))
+                    AttachmentChip(
+                        attachment: attachment, size: size,
+                        onRemove: onRemove.map { remove in { remove(attachment.id) } }
+                    )
+                    .transition(.scale(scale: 0.85).combined(with: .opacity))
                 }
             }
             .animation(.fadeUp, value: attachments.map(\.id))

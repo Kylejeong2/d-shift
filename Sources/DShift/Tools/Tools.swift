@@ -57,7 +57,8 @@ enum ToolError: LocalizedError {
         switch self {
         case .unknownTool(let name): "Unknown tool: \(name)"
         case .invalidInput(let reason): "Invalid input: \(reason)"
-        case .limitReached(let name, let limit): "\(name) can only be called \(limit) time(s) per question. Answer with what you have."
+        case .limitReached(let name, let limit):
+            "\(name) can only be called \(limit) time(s) per question. Answer with what you have."
         case .failed(let reason): reason
         }
     }

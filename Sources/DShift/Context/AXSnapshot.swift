@@ -17,7 +17,9 @@ enum AXSnapshot {
     private static let maxDepth = 40
     /// Busy Electron apps can answer each attribute read slowly, so the whole walk gets a time budget.
     private static let timeBudget: TimeInterval = 1.5
-    private static let structuralRoles: Set<String> = ["AXGroup", "AXUnknown", "AXSplitGroup", "AXScrollArea", "AXLayoutArea"]
+    private static let structuralRoles: Set<String> = [
+        "AXGroup", "AXUnknown", "AXSplitGroup", "AXScrollArea", "AXLayoutArea",
+    ]
 
     /// `includeFrames` appends each element's `[x,y wxh]` in global screen points, for drawing over it.
     static func capture(app: NSRunningApplication, includeFrames: Bool = false) -> ScreenContext {
@@ -27,7 +29,8 @@ enum AXSnapshot {
         AXUIElementSetAttributeValue(appElement, "AXManualAccessibility" as CFString, kCFBooleanTrue)
 
         let appName = app.localizedName ?? app.bundleIdentifier ?? "Unknown app"
-        guard let window = element(appElement, kAXFocusedWindowAttribute) ?? element(appElement, kAXMainWindowAttribute) else {
+        guard let window = element(appElement, kAXFocusedWindowAttribute) ?? element(appElement, kAXMainWindowAttribute)
+        else {
             return ScreenContext(appName: appName, windowTitle: "", tree: "(no accessible window)")
         }
 
@@ -40,7 +43,8 @@ enum AXSnapshot {
             tree += "\n\nSelected text:\n\(selection.prefix(maxValueChars * 4))"
         }
         return ScreenContext(
-            appName: appName, windowTitle: string(window, kAXTitleAttribute) ?? "", tree: tree, windowFrame: frame(window)
+            appName: appName, windowTitle: string(window, kAXTitleAttribute) ?? "", tree: tree,
+            windowFrame: frame(window)
         )
     }
 
@@ -72,7 +76,8 @@ enum AXSnapshot {
                 let label = Array(NSOrderedSet(array: texts)).compactMap { $0 as? String }
                     .map { "\"\($0.prefix(maxValueChars).replacingOccurrences(of: "\n", with: " "))\"" }
                     .joined(separator: " ")
-                let line = String(repeating: "  ", count: depth)
+                let line =
+                    String(repeating: "  ", count: depth)
                     + role.replacingOccurrences(of: "AX", with: "")
                     + (label.isEmpty ? "" : " \(label)")
                     + (includeFrames ? frameLabel(node) : "")
@@ -102,13 +107,13 @@ enum AXSnapshot {
 
     static func frame(_ node: AXUIElement) -> CGRect? {
         guard let position = value(node, kAXPositionAttribute), CFGetTypeID(position) == AXValueGetTypeID(),
-              let size = value(node, kAXSizeAttribute), CFGetTypeID(size) == AXValueGetTypeID()
+            let size = value(node, kAXSizeAttribute), CFGetTypeID(size) == AXValueGetTypeID()
         else { return nil }
         var origin = CGPoint.zero
         var extent = CGSize.zero
         guard AXValueGetValue(position as! AXValue, .cgPoint, &origin),
-              AXValueGetValue(size as! AXValue, .cgSize, &extent),
-              extent.width > 0, extent.height > 0
+            AXValueGetValue(size as! AXValue, .cgSize, &extent),
+            extent.width > 0, extent.height > 0
         else { return nil }
         return CGRect(origin: origin, size: extent)
     }

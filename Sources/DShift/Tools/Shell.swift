@@ -4,20 +4,27 @@ import Foundation
 /// content, which may contain injected instructions. Allowed: a pipeline of allowlisted read-only programs with
 /// relative paths and no redirection, substitution, chaining, or command-executing flags.
 enum ShellPolicy {
-    private static let readOnlyPrograms: Set<String> = ["rg", "grep", "egrep", "fgrep", "find", "ls", "cat", "head", "tail", "wc", "tree", "file", "stat"]
-    private static let forbiddenCharacters: [Character] = [";", "&", "`", "$", "<", ">", "\n", "\\", "(", ")", "{", "}"]
-    private static let forbiddenArguments: Set<String> = ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprintf", "-fls"]
+    private static let readOnlyPrograms: Set<String> = [
+        "rg", "grep", "egrep", "fgrep", "find", "ls", "cat", "head", "tail", "wc", "tree", "file", "stat",
+    ]
+    private static let forbiddenCharacters: [Character] = [
+        ";", "&", "`", "$", "<", ">", "\n", "\\", "(", ")", "{", "}",
+    ]
+    private static let forbiddenArguments: Set<String> = [
+        "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprintf", "-fls",
+    ]
 
     static func isReadOnlyWithinFolder(_ command: String) -> Bool {
         guard !command.trimmingCharacters(in: .whitespaces).isEmpty,
-              !command.contains(where: forbiddenCharacters.contains)
+            !command.contains(where: forbiddenCharacters.contains)
         else { return false }
         for segment in command.split(separator: "|", omittingEmptySubsequences: false) {
             let words = segment.split(whereSeparator: \.isWhitespace)
                 .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\"'")) }
             guard let program = words.first, readOnlyPrograms.contains(program) else { return false }
             for word in words.dropFirst() {
-                let escapesFolder = word.hasPrefix("/") || word.contains("~") || word.contains("..") || word.contains("=/")
+                let escapesFolder =
+                    word.hasPrefix("/") || word.contains("~") || word.contains("..") || word.contains("=/")
                     || (word.hasPrefix("-") && word.contains("/"))
                 if escapesFolder || forbiddenArguments.contains(word) || word.hasPrefix("--pre") { return false }
             }
@@ -59,7 +66,9 @@ enum ShellRunner {
 
         var output = String(decoding: data, as: UTF8.self)
         if output.count > maxOutputChars { output = String(output.prefix(maxOutputChars)) + "\n(output truncated)" }
-        let status = process.terminationReason == .uncaughtSignal ? "killed after \(Int(timeout))s timeout" : "exit \(process.terminationStatus)"
+        let status =
+            process.terminationReason == .uncaughtSignal
+            ? "killed after \(Int(timeout))s timeout" : "exit \(process.terminationStatus)"
         return (output.isEmpty ? "(no output)" : output) + "\n[\(status)]"
     }
 }

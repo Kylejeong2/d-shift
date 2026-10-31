@@ -27,7 +27,11 @@ enum OpenAIClient {
         instructions: String, input: String, jpeg: Data? = nil, effort: String = "medium", maxOutputTokens: Int
     ) -> AsyncThrowingStream<OpenAIStreamEvent, Error> {
         ServerSentEvents.stream(
-            { try makeRequest(instructions: instructions, input: input, jpeg: jpeg, effort: effort, maxOutputTokens: maxOutputTokens) },
+            {
+                try makeRequest(
+                    instructions: instructions, input: input, jpeg: jpeg, effort: effort,
+                    maxOutputTokens: maxOutputTokens)
+            },
             httpError: { ToolError.failed("OpenAI HTTP \($0): \($1)") },
             parse: { try parseEvent($0).map { [$0] } ?? [] }
         )
@@ -37,7 +41,8 @@ enum OpenAIClient {
         instructions: String, input: String, jpeg: Data?, effort: String, maxOutputTokens: Int
     ) throws -> URLRequest {
         guard let apiKey = Config.value("OPENAI_API_KEY") else {
-            throw ToolError.failed("No OpenAI API key. Set one from the menu bar icon > Set OpenAI API Key, or OPENAI_API_KEY in .env.")
+            throw ToolError.failed(
+                "No OpenAI API key. Set one from the menu bar icon > Set OpenAI API Key, or OPENAI_API_KEY in .env.")
         }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
