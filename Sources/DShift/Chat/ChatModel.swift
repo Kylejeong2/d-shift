@@ -83,7 +83,7 @@ final class ChatModel: ObservableObject {
             entries = saved.entries.map { Self.transcriptEntry(from: $0, chat: saved.id) }
             apiMessages = ChatArchive.apiMessages(for: saved.id)
         }
-        var available: [Tool] = [ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), MemorySearchTool(), MemoryWriteTool(), DiagramTool()]
+        var available: [Tool] = [ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), MemorySearchTool(), MemoryWriteTool(), DiagramTool(), ScratchpadTool()]
         if let codexPath = ComputerUseTool.locateCodex() {
             available.append(ComputerUseTool(codexPath: codexPath))
         }
