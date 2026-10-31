@@ -58,6 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Open Memory Folder", action: #selector(openMemory), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Open Feedback Folder", action: #selector(openFeedback), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Change API Key...", action: #selector(changeAPIKey), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Set OpenAI API Key...", action: #selector(setOpenAIKey), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit D-Shift", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
@@ -70,5 +71,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func changeAPIKey() {
         APIKeyStore.shared.reset()
         sidebar.reveal()
+    }
+
+    /// Optional key for on-screen graphics. Saved to the keychain; an empty field removes it. New chat tabs pick it up.
+    @objc private func setOpenAIKey() {
+        let alert = NSAlert()
+        alert.messageText = "OpenAI API Key"
+        alert.informativeText = "Used only for drawing on your screen (GPT-6.1 Sol Ultrafast). Open a new chat tab after saving. Leave empty to remove."
+        let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let key = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if key.isEmpty {
+            Keychain.delete("OPENAI_API_KEY")
+        } else {
+            Keychain.save(key, for: "OPENAI_API_KEY")
+        }
     }
 }

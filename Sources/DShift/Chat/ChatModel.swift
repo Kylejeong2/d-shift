@@ -87,6 +87,9 @@ final class ChatModel: ObservableObject {
         if let codexPath = ComputerUseTool.locateCodex() {
             available.append(ComputerUseTool(codexPath: codexPath))
         }
+        if OpenAIClient.hasKey {
+            available.append(OverlayTool(tracker: tracker))
+        }
         tools = ToolRegistry(tools: available)
     }
 
