@@ -89,6 +89,7 @@ final class ChatModel: ObservableObject {
         }
         if OpenAIClient.hasKey {
             available.append(OverlayTool(tracker: tracker))
+            available.append(ModelTool())
         }
         tools = ToolRegistry(tools: available)
     }
