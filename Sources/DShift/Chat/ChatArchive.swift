@@ -28,11 +28,7 @@ struct SavedChat: Codable, Identifiable {
 /// Saved chats live in `history/chats/<id>/`: `chat.json` for the transcript, `api.json` for the raw model messages,
 /// and one JPEG per attached image. The daily JSONL log in `ChatHistory` stays as a plain-text audit trail.
 enum ChatArchive {
-    static let dir: URL = {
-        let dir = Storage.historyDir.appendingPathComponent("chats", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }()
+    static let dir = Config.directory("chats", in: Storage.historyDir)
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -63,7 +59,8 @@ enum ChatArchive {
     /// Newest first. Skips folders that fail to decode rather than failing the whole list.
     static func list() -> [SavedChat] {
         let folders = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
-        return folders
+        return
+            folders
             .compactMap { try? Data(contentsOf: $0.appendingPathComponent("chat.json")) }
             .compactMap { try? decoder.decode(SavedChat.self, from: $0) }
             .sorted { $0.updatedAt > $1.updatedAt }
@@ -76,7 +73,8 @@ enum ChatArchive {
     }
 
     static func attachment(_ attachmentID: UUID, in chatID: UUID) -> Attachment? {
-        let file = dir.appendingPathComponent(chatID.uuidString).appendingPathComponent("\(attachmentID.uuidString).jpg")
+        let file = dir.appendingPathComponent(chatID.uuidString).appendingPathComponent(
+            "\(attachmentID.uuidString).jpg")
         return (try? Data(contentsOf: file)).flatMap { Attachment(jpeg: $0, id: attachmentID) }
     }
 

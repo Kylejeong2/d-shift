@@ -26,9 +26,12 @@ struct Attachment: Identifiable {
         guard let cgImage = source.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         let scale = min(1, Self.maxLongEdgePixels / CGFloat(max(cgImage.width, cgImage.height)))
         let size = NSSize(width: CGFloat(cgImage.width) * scale, height: CGFloat(cgImage.height) * scale)
-        guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
-                                            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        guard
+            let bitmap = NSBitmapImageRep(
+                bitmapDataPlanes: nil, pixelsWide: Int(size.width), pixelsHigh: Int(size.height),
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+        else { return nil }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
         NSColor.white.setFill()
@@ -36,7 +39,8 @@ struct Attachment: Identifiable {
         NSImage(cgImage: cgImage, size: size).draw(in: NSRect(origin: .zero, size: size))
         NSGraphicsContext.restoreGraphicsState()
         guard let jpeg = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]),
-              let image = NSImage(data: jpeg) else { return nil }
+            let image = NSImage(data: jpeg)
+        else { return nil }
         self.id = UUID()
         self.image = image
         self.jpeg = jpeg
@@ -156,7 +160,8 @@ final class ToolCallEntry: ObservableObject, Identifiable {
 
     var inputSummary: String {
         guard !input.isEmpty,
-              let data = try? JSONSerialization.data(withJSONObject: input, options: [.sortedKeys, .withoutEscapingSlashes])
+            let data = try? JSONSerialization.data(
+                withJSONObject: input, options: [.sortedKeys, .withoutEscapingSlashes])
         else { return "" }
         return String(decoding: data, as: UTF8.self)
     }

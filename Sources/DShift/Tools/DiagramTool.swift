@@ -6,12 +6,12 @@ import WebKit
 struct DiagramTool: Tool {
     let name = "make_diagram"
     let description = """
-    Draw a diagram (flowchart, sequence, architecture, state, class, ER, timeline, mindmap) from Mermaid source and \
-    show it to the user as an image. Use this whenever a visual explanation helps, and never draw diagrams in ASCII \
-    or code blocks. The sidebar is narrow: prefer top-to-bottom layouts (`flowchart TD`), short node labels, and at \
-    most about 15 nodes. Use subgraphs to show ownership or boundaries. Returns the rendered image, or the Mermaid \
-    error so you can fix the source and try again.
-    """
+        Draw a diagram (flowchart, sequence, architecture, state, class, ER, timeline, mindmap) from Mermaid source and \
+        show it to the user as an image. Use this whenever a visual explanation helps, and never draw diagrams in ASCII \
+        or code blocks. The sidebar is narrow: prefer top-to-bottom layouts (`flowchart TD`), short node labels, and at \
+        most about 15 nodes. Use subgraphs to show ownership or boundaries. Returns the rendered image, or the Mermaid \
+        error so you can fix the source and try again.
+        """
     let inputSchema: JSON = [
         "type": "object",
         "properties": [
@@ -51,8 +51,9 @@ final class DiagramRenderer: NSObject, WKNavigationDelegate {
     override init() {
         webView = WKWebView(frame: NSRect(x: 0, y: 0, width: Self.maxWidth, height: 1000))
         // Snapshots need the view in a window; keep it far offscreen and out of screenshots.
-        window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: Self.maxWidth, height: 1000),
-                          styleMask: .borderless, backing: .buffered, defer: false)
+        window = NSWindow(
+            contentRect: NSRect(x: -20000, y: -20000, width: Self.maxWidth, height: 1000),
+            styleMask: .borderless, backing: .buffered, defer: false)
         window.sharingType = .none
         window.contentView = webView
         window.orderBack(nil)
@@ -70,7 +71,9 @@ final class DiagramRenderer: NSObject, WKNavigationDelegate {
             arguments: ["source": source],
             contentWorld: .page
         )
-        guard let size = result as? [String: Any], let width = size["width"] as? Double, let height = size["height"] as? Double else {
+        guard let size = result as? [String: Any], let width = size["width"] as? Double,
+            let height = size["height"] as? Double
+        else {
             throw ToolError.failed("Diagram rendered with no size.")
         }
         if let error = size["error"] as? String {
@@ -82,11 +85,12 @@ final class DiagramRenderer: NSObject, WKNavigationDelegate {
         let configuration = WKSnapshotConfiguration()
         configuration.rect = rect
         configuration.afterScreenUpdates = true
-        configuration.snapshotWidth = NSNumber(value: Double(rect.width * 2)) // Retina-sharp
+        configuration.snapshotWidth = NSNumber(value: Double(rect.width * 2))  // Retina-sharp
         let image = try await webView.takeSnapshot(configuration: configuration)
         // JPEG because tool images are sent to Claude as image/jpeg. The diagram sits on an opaque dark card.
         guard let tiff = image.tiffRepresentation,
-              let jpeg = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [.compressionFactor: 0.9]) else {
+            let jpeg = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [.compressionFactor: 0.9])
+        else {
             throw ToolError.failed("Couldn't encode the diagram.")
         }
         return jpeg
@@ -109,7 +113,9 @@ final class DiagramRenderer: NSObject, WKNavigationDelegate {
         MainActor.assumeIsolated { failLoad(error) }
     }
 
-    nonisolated func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+    nonisolated func webView(
+        _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error
+    ) {
         MainActor.assumeIsolated { failLoad(error) }
     }
 
@@ -121,39 +127,39 @@ final class DiagramRenderer: NSObject, WKNavigationDelegate {
     /// Dark theme to match the sidebar. `renderDiagram` waits for Mermaid's module to load, renders, and returns
     /// the SVG's size, or `{error}` with Mermaid's parse message.
     private static let page = """
-    <!doctype html><html><head><meta charset="utf-8">
-    <style>
-      html, body { margin: 0; background: transparent; }
-      #out { display: inline-block; padding: 16px; background: #1e1e22; }
-      #out svg { display: block; max-width: \(Int(maxWidth) - 32)px; height: auto; }
-    </style>
-    <script type="module">
-      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-      mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict",
-        fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
-        flowchart: { htmlLabels: true, curve: "basis" } });
-      window.mermaid = mermaid;
-      window.mermaidReady?.();
-    </script>
-    <script>
-      const ready = new Promise(resolve => {
-        if (window.mermaid) resolve(); else window.mermaidReady = resolve;
-      });
-      let counter = 0;
-      window.renderDiagram = async (source) => {
-        await ready;
-        const out = document.getElementById("out");
-        try {
-          const { svg } = await window.mermaid.render("d" + (counter++), source);
-          out.innerHTML = svg;
-        } catch (e) {
-          out.innerHTML = "";
-          return { width: 0, height: 0, error: String(e && e.message || e) };
-        }
-        const box = out.getBoundingClientRect();
-        return { width: Math.ceil(box.width), height: Math.ceil(box.height) };
-      };
-    </script>
-    </head><body><div id="out"></div></body></html>
-    """
+        <!doctype html><html><head><meta charset="utf-8">
+        <style>
+          html, body { margin: 0; background: transparent; }
+          #out { display: inline-block; padding: 16px; background: #1e1e22; }
+          #out svg { display: block; max-width: \(Int(maxWidth) - 32)px; height: auto; }
+        </style>
+        <script type="module">
+          import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+          mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict",
+            fontFamily: "-apple-system, BlinkMacSystemFont, sans-serif",
+            flowchart: { htmlLabels: true, curve: "basis" } });
+          window.mermaid = mermaid;
+          window.mermaidReady?.();
+        </script>
+        <script>
+          const ready = new Promise(resolve => {
+            if (window.mermaid) resolve(); else window.mermaidReady = resolve;
+          });
+          let counter = 0;
+          window.renderDiagram = async (source) => {
+            await ready;
+            const out = document.getElementById("out");
+            try {
+              const { svg } = await window.mermaid.render("d" + (counter++), source);
+              out.innerHTML = svg;
+            } catch (e) {
+              out.innerHTML = "";
+              return { width: 0, height: 0, error: String(e && e.message || e) };
+            }
+            const box = out.getBoundingClientRect();
+            return { width: Math.ceil(box.width), height: Math.ceil(box.height) };
+          };
+        </script>
+        </head><body><div id="out"></div></body></html>
+        """
 }

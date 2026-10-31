@@ -17,6 +17,7 @@ Read [docs/architecture.md](docs/architecture.md) for a tour of the code.
 
 - `swift build` succeeds with no new warnings.
 - `./scripts/test.sh` passes. Add tests for logic you change, especially anything in `ShellPolicy` (security-sensitive).
+- `./scripts/format.sh` has been run; CI fails if `./scripts/format.sh --check` reports anything. Rules live in `.swift-format`.
 - You launched the app and exercised the change. For UI changes, include a screenshot or short recording.
 - Never commit `.env`, memory, history, or screenshots containing personal data.
 

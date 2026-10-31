@@ -8,7 +8,7 @@ final class DoubleShiftMonitor {
     private static let rightShiftKeyCode: UInt16 = 60
 
     private let onTrigger: () -> Void
-    private var monitors: [Any] = []
+    private var monitor: EventMonitor?
     private var shiftDownAt: TimeInterval?
     private var lastTapAt: TimeInterval = 0
 
@@ -17,25 +17,12 @@ final class DoubleShiftMonitor {
     }
 
     func start() {
-        let events: NSEvent.EventTypeMask = [.flagsChanged, .keyDown]
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: events, handler: { [weak self] in self?.handle($0) }) {
-            monitors.append(global)
-        }
-        if let local = NSEvent.addLocalMonitorForEvents(matching: events, handler: { [weak self] event in
-            self?.handle(event)
-            return event
-        }) {
-            monitors.append(local)
-        }
-    }
-
-    deinit {
-        monitors.forEach(NSEvent.removeMonitor)
+        monitor = EventMonitor(matching: [.flagsChanged, .keyDown]) { [weak self] in self?.handle($0) }
     }
 
     private func handle(_ event: NSEvent) {
         guard event.type == .flagsChanged,
-              event.keyCode == Self.leftShiftKeyCode || event.keyCode == Self.rightShiftKeyCode
+            event.keyCode == Self.leftShiftKeyCode || event.keyCode == Self.rightShiftKeyCode
         else {
             reset()
             return

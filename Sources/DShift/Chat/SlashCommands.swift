@@ -15,7 +15,8 @@ enum SlashCommand: String, CaseIterable, Identifiable {
 
     var summary: String {
         switch self {
-        case .auto: AutoMode.isOn ? "Turn off auto mode (ask before computer use)" : "Auto mode: always allow computer use"
+        case .auto:
+            AutoMode.isOn ? "Turn off auto mode (ask before computer use)" : "Auto mode: always allow computer use"
         case .new: "Start a new chat tab"
         case .clear: "Clear this chat"
         case .history: "Reopen a past chat"

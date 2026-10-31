@@ -1,4 +1,5 @@
 import Testing
+
 @testable import DShift
 
 struct MemoryPathTests {
@@ -10,7 +11,10 @@ struct MemoryPathTests {
         #expect(resolved.hasPrefix(root + "/"))
     }
 
-    @Test(arguments: ["", "/etc/passwd.md", "~/notes.md", "../escape.md", "people/../../escape.md", "notes.txt", "people/", "script.sh"])
+    @Test(arguments: [
+        "", "/etc/passwd.md", "~/notes.md", "../escape.md", "people/../../escape.md", "notes.txt", "people/",
+        "script.sh",
+    ])
     func rejectsEverythingElse(_ path: String) {
         #expect(MemoryPath.resolve(path, inRoot: root) == nil)
     }

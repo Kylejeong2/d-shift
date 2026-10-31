@@ -7,7 +7,7 @@ final class ModifierChordMonitor {
     private static let maxHoldDuration: TimeInterval = 0.8
 
     private let onTrigger: () -> Void
-    private var monitors: [Any] = []
+    private var monitor: EventMonitor?
     private var chordStartedAt: TimeInterval?
     private var isCancelled = false
 
@@ -16,20 +16,7 @@ final class ModifierChordMonitor {
     }
 
     func start() {
-        let events: NSEvent.EventTypeMask = [.flagsChanged, .keyDown]
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: events, handler: { [weak self] in self?.handle($0) }) {
-            monitors.append(global)
-        }
-        if let local = NSEvent.addLocalMonitorForEvents(matching: events, handler: { [weak self] event in
-            self?.handle(event)
-            return event
-        }) {
-            monitors.append(local)
-        }
-    }
-
-    deinit {
-        monitors.forEach(NSEvent.removeMonitor)
+        monitor = EventMonitor(matching: [.flagsChanged, .keyDown]) { [weak self] in self?.handle($0) }
     }
 
     private func handle(_ event: NSEvent) {
@@ -39,7 +26,9 @@ final class ModifierChordMonitor {
             return
         }
 
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function])
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([
+            .capsLock, .numericPad, .function,
+        ])
         if flags.isEmpty {
             if !isCancelled, let start = chordStartedAt, event.timestamp - start < Self.maxHoldDuration {
                 onTrigger()
@@ -47,7 +36,7 @@ final class ModifierChordMonitor {
             chordStartedAt = nil
             isCancelled = false
         } else if !Self.chord.isSuperset(of: flags) {
-            cancel() // Cmd or Option joined in
+            cancel()  // Cmd or Option joined in
         } else if flags == Self.chord, chordStartedAt == nil, !isCancelled {
             chordStartedAt = event.timestamp
         }

@@ -86,9 +86,12 @@ private struct HistoryRow: View {
                     .scaledFont(11)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text([chat.app, chat.updatedAt.formatted(.relative(presentation: .named))].compactMap { $0 }.joined(separator: " · "))
-                    .scaledFont(10)
-                    .foregroundStyle(.tertiary)
+                Text(
+                    [chat.app, chat.updatedAt.formatted(.relative(presentation: .named))].compactMap { $0 }.joined(
+                        separator: " · ")
+                )
+                .scaledFont(10)
+                .foregroundStyle(.tertiary)
             }
             Spacer(minLength: 4)
             if isHovering {
@@ -179,23 +182,19 @@ private struct FeedbackComposer: View {
 
 @MainActor
 enum Feedback {
-    static let dir: URL = {
-        let dir = Config.dataDir.appendingPathComponent("feedback", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }()
+    static let dir = Config.directory("feedback")
 
     private static let transcriptTail = 8
 
     static func captureDisplay() async throws -> NSImage? {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        let displayID = screen?.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
-        guard let display = content.displays.first(where: { $0.displayID == displayID }) ?? content.displays.first else { return nil }
+        let screen = NSScreen.underMouse
+        let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+        guard let display = content.displays.first(where: { $0.displayID == displayID }) ?? content.displays.first
+        else { return nil }
 
         let configuration = SCStreamConfiguration()
-        let scale = screen?.backingScaleFactor ?? 2
+        let scale = screen.backingScaleFactor
         configuration.width = Int(CGFloat(display.width) * scale)
         configuration.height = Int(CGFloat(display.height) * scale)
         let image = try await SCScreenshotManager.captureImage(
@@ -206,13 +205,15 @@ enum Feedback {
     }
 
     static func save(note: String, screenshot: NSImage?, chat: ChatModel) {
-        let stamp = ISO8601DateFormatter.string(from: Date(), timeZone: .current, formatOptions: [.withFullDate, .withTime])
+        let stamp = ISO8601DateFormatter.string(
+            from: Date(), timeZone: .current, formatOptions: [.withFullDate, .withTime])
         let folder = dir.appendingPathComponent(stamp, isDirectory: true)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
 
         if let screenshot,
-           let tiff = screenshot.tiffRepresentation,
-           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            let tiff = screenshot.tiffRepresentation,
+            let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
+        {
             try? png.write(to: folder.appendingPathComponent("screen.png"))
         }
 
@@ -223,18 +224,18 @@ enum Feedback {
             }
         }.joined(separator: "\n\n")
         let markdown = """
-        # Feedback \(stamp)
+            # Feedback \(stamp)
 
-        \(note.trimmingCharacters(in: .whitespacesAndNewlines))
+            \(note.trimmingCharacters(in: .whitespacesAndNewlines))
 
-        ## Context
-        - Focused app: \(chat.tracker.app?.localizedName ?? "none")
-        - Chat: \(chat.title)
-        - Screenshot: \(screenshot == nil ? "none" : "screen.png")
+            ## Context
+            - Focused app: \(chat.tracker.app?.localizedName ?? "none")
+            - Chat: \(chat.title)
+            - Screenshot: \(screenshot == nil ? "none" : "screen.png")
 
-        ## Recent transcript
-        \(transcript.isEmpty ? "(empty)" : transcript)
-        """
+            ## Recent transcript
+            \(transcript.isEmpty ? "(empty)" : transcript)
+            """
         try? markdown.write(to: folder.appendingPathComponent("note.md"), atomically: true, encoding: .utf8)
 
         let line = "- [ ] \(stamp): \(note.split(separator: "\n").first ?? "") (\(stamp)/note.md)\n"

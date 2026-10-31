@@ -48,7 +48,7 @@ final class AppTracker: ObservableObject {
 
         var newObserver: AXObserver?
         guard AXObserverCreate(app.processIdentifier, axNotificationCallback, &newObserver) == .success,
-              let newObserver
+            let newObserver
         else { return }
         let refcon = Unmanaged.passUnretained(self).toOpaque()
         AXObserverAddNotification(newObserver, element, kAXFocusedWindowChangedNotification as CFString, refcon)

@@ -1,4 +1,5 @@
 import Testing
+
 @testable import DShift
 
 @MainActor
@@ -6,7 +7,10 @@ struct ToolUseRepairTests {
     @Test func fillsMissingToolResultBeforeNextUserMessage() {
         var messages: [JSON] = [
             ["role": "user", "content": [["type": "text", "text": "go to slack"]]],
-            ["role": "assistant", "content": [["type": "tool_use", "id": "t1", "name": "use_computer", "input": [:]]]],
+            [
+                "role": "assistant",
+                "content": [["type": "tool_use", "id": "t1", "name": "use_computer", "input": [:]]],
+            ],
             ["role": "user", "content": [["type": "text", "text": "and dont send it"]]],
         ]
         ChatModel.repairDanglingToolUses(&messages)

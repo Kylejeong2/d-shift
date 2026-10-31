@@ -10,10 +10,13 @@ if let flag = CommandLine.arguments.firstIndex(of: "--codex-test"), CommandLine.
             exit(1)
         }
         do {
-            let result = try await CodexRunner.run(task: task, codexPath: codex, progress: { print("progress:", String($0.split(separator: "\n").last ?? "")) }, requestAccess: { app in
-                print("access requested:", app, "-> allowing once")
-                return .once
-            })
+            let result = try await CodexRunner.run(
+                task: task, codexPath: codex,
+                progress: { print("progress:", String($0.split(separator: "\n").last ?? "")) },
+                requestAccess: { app in
+                    print("access requested:", app, "-> allowing once")
+                    return .once
+                })
             print("RESULT:", result)
             exit(0)
         } catch {
@@ -29,19 +32,20 @@ if let flag = CommandLine.arguments.firstIndex(of: "--diagram-test"), CommandLin
     let out = URL(fileURLWithPath: CommandLine.arguments[flag + 1])
     Task { @MainActor in
         do {
-            let image = try await DiagramRenderer.shared.render("""
-            flowchart TD
-              subgraph You
-                A[User enters card] --> B[Evervault SDK encrypts]
-                B --> C[(Your DB: ciphertext)]
-              end
-              subgraph Evervault
-                K[Keys]
-                R[Relay decrypts in transit]
-              end
-              C --> R --> P[Stripe / Adyen]
-              K -.-> R
-            """)
+            let image = try await DiagramRenderer.shared.render(
+                """
+                flowchart TD
+                  subgraph You
+                    A[User enters card] --> B[Evervault SDK encrypts]
+                    B --> C[(Your DB: ciphertext)]
+                  end
+                  subgraph Evervault
+                    K[Keys]
+                    R[Relay decrypts in transit]
+                  end
+                  C --> R --> P[Stripe / Adyen]
+                  K -.-> R
+                """)
             try image.write(to: out)
             print("wrote", out.path, image.count, "bytes")
             exit(0)
@@ -67,8 +71,10 @@ if let flag = CommandLine.arguments.firstIndex(of: "--overlay-test"), CommandLin
         // thread would starve the overlay's web view.
         let isModel = CommandLine.arguments.contains("--model")
         let capture = { (name: String) async in
-            if isModel { return } // models are checked through their own renders below
-            let paths = NSScreen.screens.indices.map { outDir.appendingPathComponent("\(name)-display\($0 + 1).png").path }
+            if isModel { return }  // models are checked through their own renders below
+            let paths = NSScreen.screens.indices.map {
+                outDir.appendingPathComponent("\(name)-display\($0 + 1).png").path
+            }
             await Task.detached {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -84,7 +90,9 @@ if let flag = CommandLine.arguments.firstIndex(of: "--overlay-test"), CommandLin
         let drawing = Task {
             defer { finished = true }
             if CommandLine.arguments.contains("--model") { return try await ModelTool().run(["description": request]) }
-            return try await OverlayTool(tracker: tracker).run(["description": request, "standalone": CommandLine.arguments.contains("--standalone")])
+            return try await OverlayTool(tracker: tracker).run([
+                "description": request, "standalone": CommandLine.arguments.contains("--standalone"),
+            ])
         }
         var frame = 0
         while !finished {
@@ -108,7 +116,8 @@ if let flag = CommandLine.arguments.firstIndex(of: "--overlay-test"), CommandLin
         await capture("final")
         // Drag the first card by its top edge (moves it), then across its middle (rotates a 3D model inside it).
         let post = { (type: CGEventType, point: CGPoint) in
-            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+            CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(
+                tap: .cghidEventTap)
         }
         let drag = { (from: CGPoint, offset: CGVector) async in
             post(.mouseMoved, from)
@@ -132,8 +141,10 @@ if let flag = CommandLine.arguments.firstIndex(of: "--overlay-test"), CommandLin
             await capture("after-rotate")
             print("dragged card at", card)
         }
-        try? OverlayController.shared.lastPrompt.write(to: outDir.appendingPathComponent("prompt.txt"), atomically: true, encoding: .utf8)
-        try? OverlayController.shared.lastHTML.write(to: outDir.appendingPathComponent("drawing.html"), atomically: true, encoding: .utf8)
+        try? OverlayController.shared.lastPrompt.write(
+            to: outDir.appendingPathComponent("prompt.txt"), atomically: true, encoding: .utf8)
+        try? OverlayController.shared.lastHTML.write(
+            to: outDir.appendingPathComponent("drawing.html"), atomically: true, encoding: .utf8)
         print("wrote", outDir.path)
         exit(0)
     }
@@ -149,7 +160,9 @@ if let flag = CommandLine.arguments.firstIndex(of: "--scratchpad-test"), Command
     Task { @MainActor in
         let tool = ScratchpadTool()
         for input: JSON in [
-            ["action": "write", "text": """
+            [
+                "action": "write",
+                "text": """
                 # Trip budget
                 Flights and hotel for **3 nights** in Lisbon.
 
@@ -162,12 +175,16 @@ if let flag = CommandLine.arguments.firstIndex(of: "--scratchpad-test"), Command
                 - [ ] Pick a day trip
 
                 > Total: about **$1,020**
-                """],
-            ["action": "draw", "caption": "y = sin(x)", "height": 200, "code": """
+                """,
+            ],
+            [
+                "action": "draw", "caption": "y = sin(x)", "height": 200,
+                "code": """
                 ctx.strokeStyle = "#ff9f0a"; ctx.lineWidth = 2; ctx.beginPath();
                 for (let x = 0; x <= width; x++) { const y = height / 2 - Math.sin(x / width * Math.PI * 4) * 70; x ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
                 ctx.stroke(); ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(width / 8, height / 2 - 70, 5, 0, Math.PI * 2); ctx.fill();
-                """],
+                """,
+            ],
             ["action": "draw", "caption": "Broken code", "code": "undefinedFunction()"],
             ["action": "read"],
         ] {
@@ -204,7 +221,8 @@ if let flag = CommandLine.arguments.firstIndex(of: "--chat-test"), CommandLine.a
                 print("[tool] \(call.name) \(call.status) input=\(call.inputSummary.prefix(400))")
                 print("       output=\(call.output.prefix(300))")
                 if let image = call.image, let tiff = image.tiffRepresentation,
-                   let jpeg = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [:]) {
+                    let jpeg = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [:])
+                {
                     imageCount += 1
                     let url = URL(fileURLWithPath: "/tmp/dshift-chat-test-\(imageCount).jpg")
                     try? jpeg.write(to: url)

@@ -77,7 +77,9 @@ struct ToolGroup: View {
             ToolChip(entry: calls[0])
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                Button { isExpanded.toggle() } label: {
+                Button {
+                    isExpanded.toggle()
+                } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "wrench.and.screwdriver")
                             .scaledFont(11)
@@ -124,7 +126,8 @@ private struct ToolChip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if entry.status == .awaitingApproval {
-                ApprovalCard(title: "Allow \(label.lowercased())?", detail: entry.inputSummary, onResolve: entry.resolveApproval)
+                ApprovalCard(
+                    title: "Allow \(label.lowercased())?", detail: entry.inputSummary, onResolve: entry.resolveApproval)
             } else {
                 chip
             }
@@ -151,7 +154,9 @@ private struct ToolChip: View {
     }
 
     private var chip: some View {
-        Button { isExpanded.toggle() } label: {
+        Button {
+            isExpanded.toggle()
+        } label: {
             HStack(spacing: 6) {
                 ToolStatusIcon(status: entry.status)
                 if entry.isFinished {
@@ -193,7 +198,8 @@ private struct ToolChip: View {
 
     private var summary: String {
         let input = entry.input
-        return (input["title"] ?? input["query"] ?? input["url"] ?? input["command"] ?? input["path"] ?? input["scope"]) as? String ?? ""
+        return (input["title"] ?? input["query"] ?? input["url"] ?? input["command"] ?? input["path"] ?? input["scope"])
+            as? String ?? ""
     }
 }
 
@@ -271,10 +277,12 @@ private struct ApprovalCard: View {
 
     /// Plain allow/deny.
     init(title: String, detail: String, onResolve: @escaping (Bool) -> Void) {
-        self.init(title: title, detail: detail, choices: [
-            ApprovalChoice(label: "Allow", systemName: "checkmark.circle", tint: .green) { onResolve(true) },
-            ApprovalChoice(label: "Deny", systemName: "xmark.circle") { onResolve(false) },
-        ], onDismiss: { onResolve(false) })
+        self.init(
+            title: title, detail: detail,
+            choices: [
+                ApprovalChoice(label: "Allow", systemName: "checkmark.circle", tint: .green) { onResolve(true) },
+                ApprovalChoice(label: "Deny", systemName: "xmark.circle") { onResolve(false) },
+            ], onDismiss: { onResolve(false) })
     }
 
     var body: some View {
@@ -344,47 +352,55 @@ struct TaskRow: View {
         if entry.status == .awaitingApproval {
             ApprovalCard(title: "Let Codex do this?", detail: task, onResolve: entry.resolveApproval)
         } else {
-          VStack(alignment: .leading, spacing: 8) {
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 0) {
-                    Button { isExpanded.toggle() } label: { header }
-                        .buttonStyle(.plain)
-                    if entry.status == .running {
-                        Button(action: entry.cancel) {
-                            Image(systemName: "stop.fill")
-                                .scaledFont(9)
-                                .frame(width: 24, height: 24)
-                                .background(.white.opacity(0.12), in: Circle())
-                                .contentShape(Circle())
+            VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(spacing: 0) {
+                        Button {
+                            isExpanded.toggle()
+                        } label: {
+                            header
                         }
                         .buttonStyle(.plain)
-                        .padding(.trailing, 10)
-                        .help("Stop this computer task")
-                        .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        if entry.status == .running {
+                            Button(action: entry.cancel) {
+                                Image(systemName: "stop.fill")
+                                    .scaledFont(9)
+                                    .frame(width: 24, height: 24)
+                                    .background(.white.opacity(0.12), in: Circle())
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.trailing, 10)
+                            .help("Stop this computer task")
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
+                    }
+                    if isExpanded {
+                        steps.transition(.fadeUp)
                     }
                 }
-                if isExpanded {
-                    steps.transition(.fadeUp)
+                .background(Theme.surfaceFill, in: Self.shape)
+                .overlay(Self.shape.strokeBorder(Theme.stroke))
+                if let app = entry.accessRequest {
+                    ApprovalCard(
+                        title: "Allow Computer Use to use \(app)?",
+                        detail: "Codex needs permission to control this app to finish the task.",
+                        choices: [
+                            ApprovalChoice(label: "Allow once", systemName: "checkmark.circle", tint: .green) {
+                                entry.resolveAccess(.once)
+                            },
+                            ApprovalChoice(label: "Always allow \(app)", systemName: "checkmark.seal", tint: .green) {
+                                entry.resolveAccess(.always)
+                            },
+                            ApprovalChoice(label: "Deny", systemName: "xmark.circle") { entry.resolveAccess(.deny) },
+                        ],
+                        onDismiss: { entry.resolveAccess(.deny) }
+                    )
                 }
             }
-            .background(Theme.surfaceFill, in: Self.shape)
-            .overlay(Self.shape.strokeBorder(Theme.stroke))
-            if let app = entry.accessRequest {
-                ApprovalCard(
-                    title: "Allow Computer Use to use \(app)?",
-                    detail: "Codex needs permission to control this app to finish the task.",
-                    choices: [
-                        ApprovalChoice(label: "Allow once", systemName: "checkmark.circle", tint: .green) { entry.resolveAccess(.once) },
-                        ApprovalChoice(label: "Always allow \(app)", systemName: "checkmark.seal", tint: .green) { entry.resolveAccess(.always) },
-                        ApprovalChoice(label: "Deny", systemName: "xmark.circle") { entry.resolveAccess(.deny) },
-                    ],
-                    onDismiss: { entry.resolveAccess(.deny) }
-                )
-            }
-          }
-          .animation(.fadeUp, value: isExpanded)
-          .animation(.fadeUp, value: entry.status)
-          .animation(.fadeUp, value: entry.accessRequest)
+            .animation(.fadeUp, value: isExpanded)
+            .animation(.fadeUp, value: entry.status)
+            .animation(.fadeUp, value: entry.accessRequest)
         }
     }
 
@@ -463,14 +479,15 @@ private struct StatusPill: View {
     let status: ToolCallEntry.Status
 
     var body: some View {
-        let (label, color): (String, Color) = switch status {
-        case .preparing, .running: ("Running", .blue)
-        case .awaitingApproval: ("Waiting", .orange)
-        case .succeeded: ("Completed", .green)
-        case .failed: ("Failed", .red)
-        case .denied: ("Denied", .gray)
-        case .cancelled: ("Cancelled", .gray)
-        }
+        let (label, color): (String, Color) =
+            switch status {
+            case .preparing, .running: ("Running", .blue)
+            case .awaitingApproval: ("Waiting", .orange)
+            case .succeeded: ("Completed", .green)
+            case .failed: ("Failed", .red)
+            case .denied: ("Denied", .gray)
+            case .cancelled: ("Cancelled", .gray)
+            }
         Text(label)
             .scaledFont(11, weight: .medium)
             .foregroundStyle(color)
@@ -524,7 +541,9 @@ private struct HoverFillStyle: ButtonStyle {
 
         var body: some View {
             configuration.label
-                .background(Theme.innerShape.fill(.white.opacity(configuration.isPressed ? 0.12 : isHovered ? 0.07 : 0)))
+                .background(
+                    Theme.innerShape.fill(.white.opacity(configuration.isPressed ? 0.12 : isHovered ? 0.07 : 0))
+                )
                 .onHover { isHovered = $0 }
                 .animation(.easeOut(duration: 0.1), value: isHovered)
         }
@@ -560,7 +579,8 @@ private struct DiagramImage: View {
                     let url = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
                         .appendingPathComponent("diagram-\(Int(Date().timeIntervalSince1970)).jpg")
                     if let tiff = image.tiffRepresentation,
-                       let jpeg = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [:]) {
+                        let jpeg = NSBitmapImageRep(data: tiff)?.representation(using: .jpeg, properties: [:])
+                    {
                         try? jpeg.write(to: url)
                         NSWorkspace.shared.activateFileViewerSelecting([url])
                     }

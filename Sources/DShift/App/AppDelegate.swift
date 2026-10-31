@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let editItem = NSMenuItem()
         editItem.submenu = edit
         let main = NSMenu()
-        main.addItem(NSMenuItem()) // app menu slot
+        main.addItem(NSMenuItem())  // app menu slot
         main.addItem(editItem)
         NSApp.mainMenu = main
     }
@@ -54,11 +54,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "shift", accessibilityDescription: "D-Shift")
         let menu = NSMenu()
-        menu.addItem(withTitle: "Toggle Sidebar (Shift Shift)", action: #selector(toggleSidebar), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Toggle Sidebar (Shift Shift)", action: #selector(toggleSidebar), keyEquivalent: "")
+            .target = self
         menu.addItem(withTitle: "Open Memory Folder", action: #selector(openMemory), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Open Feedback Folder", action: #selector(openFeedback), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Open Feedback Folder", action: #selector(openFeedback), keyEquivalent: "").target =
+            self
         menu.addItem(withTitle: "Change API Key...", action: #selector(changeAPIKey), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Set OpenAI API Key...", action: #selector(setOpenAIKey), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Set OpenAI API Key...", action: #selector(setOpenAIKey), keyEquivalent: "").target =
+            self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit D-Shift", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
@@ -77,7 +80,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func setOpenAIKey() {
         let alert = NSAlert()
         alert.messageText = "OpenAI API Key"
-        alert.informativeText = "Used only for drawing on your screen (GPT-6.1 Sol Ultrafast). Open a new chat tab after saving. Leave empty to remove."
+        alert.informativeText =
+            "Used only for drawing on your screen (GPT-6.1 Sol Ultrafast). Open a new chat tab after saving. Leave empty to remove."
         let field = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
         alert.accessoryView = field
         alert.addButton(withTitle: "Save")
