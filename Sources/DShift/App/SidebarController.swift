@@ -126,7 +126,7 @@ final class SidebarController {
         if !panel.isVisible { show() }
     }
 
-    private func show() {
+    func show() {
         let visible = NSScreen.underMouse.visibleFrame
         let maxHeight = visible.height - Self.edgeInset * 2
         let maxWidth = visible.width - Self.edgeInset * 2

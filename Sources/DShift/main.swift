@@ -235,9 +235,9 @@ if let flag = CommandLine.arguments.firstIndex(of: "--chat-test"), CommandLine.a
     RunLoop.main.run()
 }
 
-SingleInstance.claim()
 let app = NSApplication.shared
 let delegate = MainActor.assumeIsolated { AppDelegate() }
+MainActor.assumeIsolated { SingleInstance.claim(onRelaunch: delegate.showSidebar) }
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()

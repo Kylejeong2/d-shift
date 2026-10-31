@@ -30,8 +30,12 @@ build_and_restart() {
     return
   fi
   stop_app
-  # Also stop copies started outside this script, so only one sidebar answers Shift Shift.
-  pkill -f "$binary" 2>/dev/null
+  # D-Shift refuses to start while another copy runs (see SingleInstance.swift), so stop whichever copy holds the
+  # lock, even one started from another checkout.
+  local lock="${TMPDIR%/}/dshift.lock" running
+  if running=$(cat "$lock" 2>/dev/null) && [[ -n "$running" ]] && kill "$running" 2>/dev/null; then
+    while kill -0 "$running" 2>/dev/null; do sleep 0.1; done
+  fi
   "$binary" &
   app_pid=$!
   echo "[dev] running pid $app_pid"
