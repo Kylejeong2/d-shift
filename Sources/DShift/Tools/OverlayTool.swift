@@ -42,46 +42,15 @@ struct OverlayTool: Tool {
     func run(_ input: JSON) async throws -> ToolOutput {
         let request = input["description"] as? String ?? ""
         let isStandalone = input["standalone"] as? Bool ?? false
-        let overlay = OverlayController.shared
-
-        var windowFrame: CGRect?
-        var screenContext = "Nothing on screen is relevant: center the drawing on the display."
-        var jpeg: Data?
-        if !isStandalone, let app = tracker.app {
-            let started = Date()
-            let context = await Task.detached { AXSnapshot.capture(app: app, includeFrames: true) }.value
-            let treeTime = Date().timeIntervalSince(started)
-            // Web and Electron apps leave a lot out of the tree, so Sol also sees the window. Without Screen Recording
-            // permission this comes back without an image and Sol works from the tree alone.
-            let screenshot = try? await ScreenshotTool(tracker: tracker).run(["scope": "window"])
-            let image = screenshot?.jpeg.flatMap { NSBitmapImageRep(data: $0) }
-            Log.info(
-                "overlay",
-                String(
-                    format: "context: tree %.2fs, screenshot %.2fs", treeTime,
-                    Date().timeIntervalSince(started) - treeTime))
-            windowFrame = context.windowFrame
-            jpeg = image == nil ? nil : screenshot?.jpeg
-            screenContext = """
-                Focused window: \(context.appName) "\(context.windowTitle)" \
-                \(context.windowFrame.map { "[\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))x\(Int($0.height))]" } ?? "")
-
-                \(Self.screenshotNote(image: image, window: context.windowFrame))
-
-                Accessibility tree of the focused window, with element frames:
-                \(context.tree)
-                """
+        if JarvisController.shared.isOpen {
+            try await JarvisController.shared.drawOnScreen(request: request, aboutScreen: !isStandalone)
+            return ToolOutput(text: "Drawn on the user's screen in Jarvis mode. They can see it now.")
         }
-        let screen = OverlayController.screen(containing: windowFrame)
-        let display = OverlayController.globalFrame(of: screen)
-
-        let prompt = """
-            Display to draw on: [\(Int(display.minX)),\(Int(display.minY)) \(Int(display.width))x\(Int(display.height))]
-
-            Request: \(request)
-
-            \(screenContext)
-            """
+        let overlay = OverlayController.shared
+        let context = await Self.screenContext(for: request, tracker: tracker, standalone: isStandalone)
+        let screen = context.screen
+        let prompt = context.prompt
+        let jpeg = context.jpeg
 
         overlay.lastPrompt = prompt
         let drawing = await overlay.begin(on: screen, standalone: isStandalone)
@@ -117,6 +86,54 @@ struct OverlayTool: Tool {
         return ToolOutput(text: "Drawn on the user's screen. They can see it now; Esc clears it.")
     }
 
+    struct ScreenContext {
+        let prompt: String
+        let jpeg: Data?
+        let screen: NSScreen
+    }
+
+    @MainActor
+    static func screenContext(for request: String, tracker: AppTracker, standalone: Bool) async -> ScreenContext {
+        var windowFrame: CGRect?
+        var screenContext = "Nothing on screen is relevant: center the drawing on the display."
+        var jpeg: Data?
+        if !standalone, let app = tracker.app {
+            let started = Date()
+            let context = await Task.detached { AXSnapshot.capture(app: app, includeFrames: true) }.value
+            let treeTime = Date().timeIntervalSince(started)
+            // Web and Electron apps leave a lot out of the tree, so Sol also sees the window. Without Screen Recording
+            // permission this comes back without an image and Sol works from the tree alone.
+            let screenshot = try? await ScreenshotTool(tracker: tracker).run(["scope": "window"])
+            let image = screenshot?.jpeg.flatMap { NSBitmapImageRep(data: $0) }
+            Log.info(
+                "overlay",
+                String(
+                    format: "context: tree %.2fs, screenshot %.2fs", treeTime,
+                    Date().timeIntervalSince(started) - treeTime))
+            windowFrame = context.windowFrame
+            jpeg = image == nil ? nil : screenshot?.jpeg
+            screenContext = """
+                Focused window: \(context.appName) "\(context.windowTitle)" \
+                \(context.windowFrame.map { "[\(Int($0.minX)),\(Int($0.minY)) \(Int($0.width))x\(Int($0.height))]" } ?? "")
+
+                \(screenshotNote(image: image, window: context.windowFrame))
+
+                Accessibility tree of the focused window, with element frames:
+                \(context.tree)
+                """
+        }
+        let screen = OverlayController.screen(containing: windowFrame)
+        let display = OverlayController.globalFrame(of: screen)
+        let prompt = """
+            Display to draw on: [\(Int(display.minX)),\(Int(display.minY)) \(Int(display.width))x\(Int(display.height))]
+
+            Request: \(request)
+
+            \(screenContext)
+            """
+        return ScreenContext(prompt: prompt, jpeg: jpeg, screen: screen)
+    }
+
     /// Tells Sol how screenshot pixels map to screen points.
     private static func screenshotNote(image: NSBitmapImageRep?, window: CGRect?) -> String {
         guard let image, let window else { return "No screenshot available; work from the accessibility tree." }
@@ -127,17 +144,7 @@ struct OverlayTool: Tool {
             """
     }
 
-    private static let instructions = """
-        You are a motion and information designer drawing live graphics on a transparent overlay that covers the user's \
-        screen, on top of their apps. The bar is a polished product demo people want to share, not a generic tooltip. \
-        Output only an HTML fragment: no markdown fences, no <html>, <head>, or <body>, and no commentary.
-
-        Coordinates: use position:absolute with left/top in CSS pixels equal to macOS screen points, the same space as the \
-        [x,y wxh] frames in the accessibility tree (origin at the top-left of the main display). Point at an element using \
-        its frame from the tree when it has one. Elements marked [offscreen] are scrolled out of view: don't draw on them. \
-        For anything the tree lacks or that's drawn as an image, locate it in the screenshot and convert with the given \
-        mapping. Stay inside the display rectangle you're given.
-
+    static let visualStyle = """
         Design: before writing, pick a visual idea that fits this request and this screen, then execute it with care. \
         Ideas to draw from, not a checklist: hand-drawn-feeling SVG strokes that draw themselves on (stroke-dasharray \
         animation); a spotlight that dims everything except the subject; glowing outlines that pulse once; numbered steps \
@@ -150,6 +157,25 @@ struct OverlayTool: Tool {
         Words: the drawing must read at a glance from arm's length. Prefer one bold idea per card, a headline of a few \
         words, and at most one or two short lines of body text. Show the idea with shapes, arrows, and color rather than \
         sentences; the chat carries the detail. Don't stack labels on top of each other or on top of busy content.
+        """
+
+    static let scriptRules = """
+        Scripts: plain <script> or <script type="module">. The only allowed network source is https://cdn.jsdelivr.net. \
+        No fetch, external images, or web fonts.
+        """
+
+    static let instructions = """
+        You are a motion and information designer drawing live graphics on a transparent overlay that covers the user's \
+        screen, on top of their apps. The bar is a polished product demo people want to share, not a generic tooltip. \
+        Output only an HTML fragment: no markdown fences, no <html>, <head>, or <body>, and no commentary.
+
+        Coordinates: use position:absolute with left/top in CSS pixels equal to macOS screen points, the same space as the \
+        [x,y wxh] frames in the accessibility tree (origin at the top-left of the main display). Point at an element using \
+        its frame from the tree when it has one. Elements marked [offscreen] are scrolled out of view: don't draw on them. \
+        For anything the tree lacks or that's drawn as an image, locate it in the screenshot and convert with the given \
+        mapping. Stay inside the display rectangle you're given.
+
+        \(visualStyle)
 
         Never cover the whole screen or the thing being explained; leave what you aren't annotating readable. Put \
         explanations, charts, and diagrams beside the relevant area. Text must stay legible on any background.
@@ -158,8 +184,7 @@ struct OverlayTool: Tool {
         first, then elements in the order the user should read them. Never wait until the end to make things appear: the \
         user should watch the drawing build up.
 
-        Scripts: plain <script> or <script type="module">. The only allowed network source is https://cdn.jsdelivr.net. \
-        No fetch, external images, or web fonts.
+        \(scriptRules)
 
         Interaction: the overlay lets clicks through to the apps underneath, except over <canvas> elements and elements \
         with the data-interactive attribute, which receive the mouse and scroll wheel. Mark buttons, sliders, and other \
@@ -179,12 +204,9 @@ struct OverlayTool: Tool {
 final class OverlayController: NSObject, WKNavigationDelegate {
     static let shared = OverlayController()
 
-    // Only the CDN may serve scripts, and nothing may be fetched or framed, so screen text the model saw can't be
-    // sent anywhere even if a page on screen tries to inject instructions.
     private static let page = """
         <!doctype html><html><head><meta charset="utf-8">
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; \
-        style-src 'unsafe-inline'; img-src data: blob:; font-src data:">
+        \(OverlayPage.contentSecurityPolicy)
         <style>
           html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
           body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
@@ -225,65 +247,15 @@ final class OverlayController: NSObject, WKNavigationDelegate {
             window.webkit.messageHandlers.hitAreas.postMessage(areas);
           }, 200);
           const stage = () => document.getElementById("stage");
-          const unfence = html => html.replace(/^\\s*```(?:html)?\\s*/i, "").replace(/```\\s*$/, "");
           // The stage is shifted so the model can use global screen points on any display.
           window.setOrigin = (x, y) => { stage().style.transform = `translate(${-x}px, ${-y}px)`; };
-          // Streamed HTML only ever grows, so everything before the first difference is already final. Keep those
-          // nodes (their entrance animations play once) and patch the one still being written instead of rebuilding.
-          const sameShell = (a, b) => a.nodeType === 1 && b.nodeType === 1 && a.tagName === b.tagName
-            && a.attributes.length === b.attributes.length
-            && [...a.attributes].every(attribute => b.getAttribute(attribute.name) === attribute.value);
-          // Nodes that came from the streamed HTML. Anything scripts add (a three.js canvas, say) isn't in the HTML, so
-          // the morph leaves it alone instead of deleting it on the next update.
-          const owned = new WeakSet();
-          const own = node => { owned.add(node); node.childNodes.forEach(own); };
-          const morph = (target, source) => {
-            const next = [...source.childNodes], current = [...target.childNodes].filter(node => owned.has(node));
-            let i = 0;
-            while (i < next.length && i < current.length && current[i].isEqualNode(next[i])) i++;
-            if (i < next.length && i < current.length) {
-              const [a, b] = [current[i], next[i]];
-              if (a.nodeType === 3 && b.nodeType === 3) { a.nodeValue = b.nodeValue; i++; }
-              else if (sameShell(a, b)) { morph(a, b); i++; }
-            }
-            current.slice(i).forEach(node => node.remove());
-            next.slice(i).forEach(node => { own(node); target.appendChild(node); });
-          };
-          const parse = html => {
-            const template = document.createElement("template");
-            template.innerHTML = html;
-            return template.content;
-          };
-          // Parsed scripts never run, so each one is run once, as soon as its closing tag has streamed in, by copying it
-          // into #runtime. The parsed copy stays in the stage untouched so the morph keeps matching it.
-          let scriptsRun = 0;
-          const runNewScripts = () => {
-            const scripts = [...stage().querySelectorAll("script")];
-            for (; scriptsRun < scripts.length; scriptsRun++) {
-              const parsed = scripts[scriptsRun];
-              const script = document.createElement("script");
-              for (const attribute of parsed.attributes) script.setAttribute(attribute.name, attribute.value);
-              script.textContent = parsed.textContent;
-              document.getElementById("runtime").appendChild(script);
-            }
-          };
-          const withoutOpenScript = html => {
-            const start = html.lastIndexOf("<script");
-            return start !== -1 && html.indexOf("<\\/script>", start) === -1 ? html.slice(0, start) : html;
-          };
-          // Mid-stream: hold back a script that's still being written and any half-written trailing tag.
-          window.preview = html => {
-            morph(stage(), parse(withoutOpenScript(unfence(html)).replace(/<[^>]*$/, "")));
-            runNewScripts();
-          };
-          window.commit = html => {
-            morph(stage(), parse(unfence(html)));
-            runNewScripts();
-          };
+          \(OverlayPage.streamRenderer)
+          window.preview = html => renderStream(stage(), html, false);
+          window.commit = html => renderStream(stage(), html, true);
         </script>
         </head><body><div id="stage"></div><div id="runtime" hidden></div></body></html>
         """
-    private static let baseURL = URL(string: "https://cdn.jsdelivr.net/")!
+    private static let baseURL = OverlayPage.baseURL
 
     private let window: NSPanel
     private let webView: WKWebView

@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var sidebar: SidebarController!
     private var shiftMonitor: DoubleShiftMonitor!
     private var appshotMonitor: ModifierChordMonitor!
+    private var jarvisHotkey: EventMonitor?
     private var statusItem: NSStatusItem!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -21,6 +22,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { await self?.sidebar.appshot() }
         }
         appshotMonitor.start()
+        jarvisHotkey = EventMonitor(matching: .keyDown) { event in
+            let jKey: UInt16 = 38
+            let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+            if event.keyCode == jKey, modifiers == [.control, .option] { JarvisController.shared.toggle() }
+        }
         setUpStatusItem()
         setUpEditMenu()
     }
@@ -61,6 +67,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: "Toggle Sidebar (Shift Shift)", action: #selector(toggleSidebar), keyEquivalent: "")
             .target = self
+        menu.addItem(withTitle: "Jarvis Mode (Control-Option-J)", action: #selector(toggleJarvis), keyEquivalent: "")
+            .target = self
         menu.addItem(withTitle: "Open Memory Folder", action: #selector(openMemory), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Open Feedback Folder", action: #selector(openFeedback), keyEquivalent: "").target =
             self
@@ -73,6 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func toggleSidebar() { sidebar.toggle() }
+    @objc private func toggleJarvis() { JarvisController.shared.toggle() }
     @objc private func openMemory() { NSWorkspace.shared.open(Storage.memoryDir) }
     @objc private func openFeedback() { NSWorkspace.shared.open(Feedback.dir) }
 
