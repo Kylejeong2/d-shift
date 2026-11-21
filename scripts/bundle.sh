@@ -33,7 +33,7 @@ iconutil -c icns "$iconset" -o "$app/Contents/Resources/AppIcon.icns"
 rm -rf "$iconset"
 
 identity="${CODESIGN_IDENTITY:--}"
-codesign --force --options runtime --timestamp=none --sign "$identity" "$app"
+codesign --force --options runtime --timestamp=none --entitlements Packaging/DShift.entitlements --sign "$identity" "$app"
 codesign --verify --strict "$app"
 
 zip="$dist/D-Shift-$version.zip"

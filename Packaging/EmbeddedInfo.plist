@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.kylejeong2.dshift</string>
+    <key>CFBundleName</key>
+    <string>D-Shift</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Jarvis mode listens so you can talk to it. Audio is streamed to OpenAI only while Jarvis is open.</string>
+    <key>NSCameraUseContinuityCameraDeviceType</key>
+    <true/>
+    <key>NSCameraUsageDescription</key>
+    <string>Jarvis mode tracks your hands with the camera so you can move, draw, and erase on screen. Video never leaves your Mac.</string>
+</dict>
+</plist>
