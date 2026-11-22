@@ -775,8 +775,8 @@ private struct ModelLabel: View {
         .fixedSize()
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
-        .background(Color.accentColor.opacity(0.18), in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.45)))
+        .background(Color.accentColor.opacity(0.18), in: Theme.innerShape)
+        .overlay(Theme.innerShape.strokeBorder(Color.accentColor.opacity(0.45)))
         .help("Running locally: Ollama model \(InklingClient.model) at \(InklingClient.host)")
     }
 }
