@@ -64,7 +64,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: "Open Memory Folder", action: #selector(openMemory), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Open Feedback Folder", action: #selector(openFeedback), keyEquivalent: "").target =
             self
-        menu.addItem(withTitle: "Change API Key...", action: #selector(changeAPIKey), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Set OpenAI API Key...", action: #selector(setOpenAIKey), keyEquivalent: "").target =
             self
         menu.addItem(.separator())
@@ -75,11 +74,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func toggleSidebar() { sidebar.toggle() }
     @objc private func openMemory() { NSWorkspace.shared.open(Storage.memoryDir) }
     @objc private func openFeedback() { NSWorkspace.shared.open(Feedback.dir) }
-
-    @objc private func changeAPIKey() {
-        APIKeyStore.shared.reset()
-        sidebar.reveal()
-    }
 
     /// Optional key for on-screen graphics. Saved to the keychain; an empty field removes it. New chat tabs pick it up.
     @objc private func setOpenAIKey() {

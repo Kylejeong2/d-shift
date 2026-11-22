@@ -8,7 +8,7 @@ D-Shift is a single SwiftPM executable built on AppKit with SwiftUI views inside
 |---|---|---|
 | App | `App/AppDelegate.swift`, `App/SidebarController.swift`, `App/DoubleShiftMonitor.swift`, `App/ResizeHandle.swift`, `App/Config.swift` | Lifecycle, menu bar item, the panel window, the double-Shift trigger, edge resizing, settings |
 | Context | `Context/AXSnapshot.swift`, `Context/AppTracker.swift` | Serializing the focused window's accessibility tree, following the frontmost app and window title live |
-| Chat | `Chat/ChatModel.swift`, `Chat/ChatStore.swift`, `Chat/ClaudeClient.swift`, `Chat/Transcript.swift`, `Chat/Usage.swift` | One agent loop per tab, tab management, the streaming HTTP client, transcript entries, token accounting |
+| Chat | `Chat/ChatModel.swift`, `Chat/ChatStore.swift`, `Chat/InklingClient.swift`, `Chat/Transcript.swift`, `Chat/Usage.swift` | One agent loop per tab, tab management, the streaming HTTP client, transcript entries, token accounting |
 | Tools | `Tools/*.swift` | The `Tool` protocol, registry and validation, built-in tools, the shell policy |
 | Memory | `Memory/Memory.swift` | Memory folder layout and seeding, the overview sent each turn, the JSONL chat log |
 | UI | `UI/ChatView.swift` | Tabs, app header, transcript, tool cards, usage bar, input |
@@ -41,7 +41,7 @@ It sets `AXManualAccessibility` on the app element first, because Chrome and Ele
 Each tab owns a `ChatModel`, which keeps its API transcript as raw JSON content blocks.
 
 1. **User turn:** `<screen>` (only if it changed since the last send), `<memory>` (me.md plus the file list), then the question.
-2. **Stream:** `ClaudeClient` turns SSE lines into `StreamEvent`s at content-block granularity. `AssistantMessage` accumulates blocks verbatim, including thinking blocks and their signatures, so they can be sent back unchanged as the API requires during tool use.
+2. **Stream:** `InklingClient` turns SSE lines into `StreamEvent`s at content-block granularity. `AssistantMessage` accumulates blocks verbatim, including thinking blocks and their signatures, so they can be sent back unchanged as the API requires during tool use.
 3. **Tools:** on `stop_reason == "tool_use"`, each `tool_use` block is validated, checked against its per-question call limit, approved if needed, and run. Hidden tools (memory, `read_screen`) run without a transcript row. The results go back in a single user message. Images (screenshots) are sent as image blocks inside `tool_result`.
 4. The loop repeats on `tool_use` and `pause_turn`, up to 12 iterations. `refusal` and `max_tokens` end it with a note.
 5. **Failure or Stop:** the transcript rolls back to before the turn, so it never contains a `tool_use` without its result.

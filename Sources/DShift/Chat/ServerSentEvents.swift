@@ -1,6 +1,6 @@
 import Foundation
 
-/// The HTTP streaming loop shared by the Claude and OpenAI clients: POST, surface non-200 bodies as errors, and map
+/// The HTTP streaming loop shared by the Inkling and OpenAI clients: POST, surface non-200 bodies as errors, and map
 /// each SSE line to zero or more events.
 enum ServerSentEvents {
     static func stream<Event>(

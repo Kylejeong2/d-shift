@@ -11,15 +11,12 @@ enum StreamEvent {
     case usage(JSON)
 }
 
-enum ClaudeError: LocalizedError {
-    case missingAPIKey
+enum InklingError: LocalizedError {
     case http(status: Int, body: String)
     case stream(String)
 
     var errorDescription: String? {
         switch self {
-        case .missingAPIKey:
-            "No API key. Add one from the menu bar icon > Change API Key, or set ANTHROPIC_API_KEY in .env."
         case .http(let status, let body):
             "HTTP \(status): \(body)"
         case .stream(let message):
@@ -28,17 +25,27 @@ enum ClaudeError: LocalizedError {
     }
 }
 
-/// Streams events from the Messages API over raw HTTP (there is no official Swift SDK).
-enum ClaudeClient {
-    private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
-    static let model = "claude-opus-5-5"
-    // Low effort keeps sidebar answers snappy; raise to "medium" or "high" if answers feel shallow.
+/// Streams events from Inkling 2 Mini served locally by Ollama through its Anthropic-compatible Messages endpoint.
+enum InklingClient {
+    static var host: String { Config.value("OLLAMA_HOST") ?? "http://localhost:11434" }
+    private static var endpoint: URL { URL(string: host)!.appendingPathComponent("v1/messages") }
+    /// A variant of inkling-2-mini with a 128K context window. Ollama ignores per-request context options and
+    /// otherwise loads the model at 32K, silently truncating longer chats. See the README for how to create it.
+    static var model: String { Config.value("INKLING_MODEL") ?? "inkling-2-mini-128k" }
+    /// Shown under the chat input. A custom INKLING_MODEL shows its raw Ollama tag.
+    static var displayName: String { model.hasPrefix("inkling-2-mini") ? "Inkling 2 Mini" : model }
+    /// The model defaults to high effort, which takes several times longer for a typical sidebar answer.
     private static let effort = "low"
 
     static func stream(system: String, messages: [JSON], tools: [JSON]) -> AsyncThrowingStream<StreamEvent, Error> {
         ServerSentEvents.stream(
             { try makeRequest(system: system, messages: messages, tools: tools) },
-            httpError: { ClaudeError.http(status: $0, body: $1) },
+            httpError: { status, body in
+                InklingError.http(
+                    status: status,
+                    body: status == 404
+                        ? "\(body) (model \(model) not found in Ollama; see the README setup steps)" : body)
+            },
             parse: parseEvents
         )
     }
@@ -46,24 +53,29 @@ enum ClaudeClient {
     private static func makeRequest(system: String, messages: [JSON], tools: [JSON]) throws -> URLRequest {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        guard let apiKey = Config.value("ANTHROPIC_API_KEY") else { throw ClaudeError.missingAPIKey }
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        request.setValue("server-side-fallback-2026-07-01", forHTTPHeaderField: "anthropic-beta")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         var body: JSON = [
             "model": model,
-            "max_tokens": 64000,
+            "max_tokens": 32000,
             "stream": true,
             "system": system,
-            "messages": messages,
+            "messages": messages.map(withoutAnthropicServerBlocks),
             "output_config": ["effort": effort],
-            "cache_control": ["type": "ephemeral"],
-            "fallbacks": "default",
         ]
         if !tools.isEmpty { body["tools"] = tools }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         return request
+    }
+
+    /// Chats saved while D-Shift ran on Claude can hold Anthropic-hosted web search and fetch blocks.
+    static func withoutAnthropicServerBlocks(_ message: JSON) -> JSON {
+        guard let blocks = message["content"] as? [JSON] else { return message }
+        var cleaned = message
+        cleaned["content"] = blocks.filter { block in
+            let type = block["type"] as? String ?? ""
+            return type != "server_tool_use" && (type == "tool_result" || !type.hasSuffix("_tool_result"))
+        }
+        return cleaned
     }
 
     static func parseEvents(_ line: String) throws -> [StreamEvent] {
@@ -86,7 +98,7 @@ enum ClaudeClient {
             return events
         case "error":
             let message = (event["error"] as? JSON)?["message"] as? String
-            throw ClaudeError.stream(message ?? "Unknown streaming error")
+            throw InklingError.stream(message ?? "Unknown streaming error")
         default:
             return []
         }

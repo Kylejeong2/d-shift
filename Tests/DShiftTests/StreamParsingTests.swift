@@ -4,7 +4,7 @@ import Testing
 
 struct StreamParsingTests {
     @Test func claudeParsesContentBlockEvents() throws {
-        let start = try ClaudeClient.parseEvents(
+        let start = try InklingClient.parseEvents(
             #"data: {"type":"content_block_start","index":2,"content_block":{"type":"text"}}"#)
         guard case .blockStart(let index, let block) = start.first else {
             Issue.record("expected blockStart")
@@ -13,7 +13,7 @@ struct StreamParsingTests {
         #expect(index == 2)
         #expect(block["type"] as? String == "text")
 
-        let delta = try ClaudeClient.parseEvents(
+        let delta = try InklingClient.parseEvents(
             #"data: {"type":"content_block_delta","index":1,"delta":{"text":"hi"}}"#)
         guard case .blockDelta(1, let fields) = delta.first else {
             Issue.record("expected blockDelta")
@@ -21,7 +21,7 @@ struct StreamParsingTests {
         }
         #expect(fields["text"] as? String == "hi")
 
-        let stop = try ClaudeClient.parseEvents(#"data: {"type":"content_block_stop","index":3}"#)
+        let stop = try InklingClient.parseEvents(#"data: {"type":"content_block_stop","index":3}"#)
         guard case .blockStop(3) = stop.first else {
             Issue.record("expected blockStop")
             return
@@ -29,7 +29,7 @@ struct StreamParsingTests {
     }
 
     @Test func claudeReadsUsageAndStopReason() throws {
-        let start = try ClaudeClient.parseEvents(
+        let start = try InklingClient.parseEvents(
             #"data: {"type":"message_start","message":{"usage":{"input_tokens":5}}}"#)
         guard case .usage(let usage) = start.first else {
             Issue.record("expected usage")
@@ -37,7 +37,7 @@ struct StreamParsingTests {
         }
         #expect(usage["input_tokens"] as? Int == 5)
 
-        let end = try ClaudeClient.parseEvents(
+        let end = try InklingClient.parseEvents(
             #"data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":9}}"#)
         #expect(end.count == 2)
         guard case .stopReason("tool_use") = end.first, case .usage = end.last else {
@@ -47,12 +47,12 @@ struct StreamParsingTests {
     }
 
     @Test func claudeIgnoresNonDataLinesAndThrowsOnErrors() throws {
-        #expect(try ClaudeClient.parseEvents("event: ping").isEmpty)
-        #expect(try ClaudeClient.parseEvents(#"data: {"type":"ping"}"#).isEmpty)
-        #expect(throws: ClaudeError.self) {
-            try ClaudeClient.parseEvents(#"data: {"type":"error","error":{"message":"overloaded"}}"#)
+        #expect(try InklingClient.parseEvents("event: ping").isEmpty)
+        #expect(try InklingClient.parseEvents(#"data: {"type":"ping"}"#).isEmpty)
+        #expect(throws: InklingError.self) {
+            try InklingClient.parseEvents(#"data: {"type":"error","error":{"message":"overloaded"}}"#)
         }
-        #expect(throws: (any Error).self) { try ClaudeClient.parseEvents("data: {not json") }
+        #expect(throws: (any Error).self) { try InklingClient.parseEvents("data: {not json") }
     }
 
     @Test func openAIParsesTextAndUsage() throws {

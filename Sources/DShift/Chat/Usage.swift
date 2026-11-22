@@ -27,12 +27,7 @@ struct TokenUsage {
 
 /// Per-chat usage: session totals plus how full the context window was on the latest request.
 struct ChatUsage {
-    static let contextWindow = 1_000_000
-    // Claude Opus 5.5 list prices in dollars per million tokens. Cache writes are the 5-minute TTL rate (1.25x input).
-    private static let inputPrice = 4.0
-    private static let outputPrice = 20.0
-    private static let cacheReadPrice = 0.20
-    private static let cacheWritePrice = 5.0
+    static let contextWindow = 131_072
 
     private(set) var totals = TokenUsage()
     private(set) var requests = 0
@@ -47,16 +42,35 @@ struct ChatUsage {
     var contextFraction: Double {
         Double(contextTokens) / Double(Self.contextWindow)
     }
+}
 
-    var cacheHitRate: Double {
-        let prompt = totals.input + totals.cacheRead + totals.cacheWrite
-        return prompt == 0 ? 0 : Double(totals.cacheRead) / Double(prompt)
+/// Live view of the model's output while it generates: a tail of its reasoning, streamed chunks so far, and the
+/// rate of the last reply. Kept apart from `ChatModel` so per-token updates only redraw the views that show them.
+@MainActor
+final class GenerationProgress: ObservableObject {
+    private static let reasoningTailLength = 600
+
+    @Published private(set) var reasoning = ""
+    @Published private(set) var chunks = 0
+    @Published private(set) var startedGeneratingAt: Date?
+    @Published private(set) var lastTokensPerSecond: Double?
+
+    func reset() {
+        reasoning = ""
+        chunks = 0
+        startedGeneratingAt = nil
     }
 
-    var estimatedCost: Double {
-        (Double(totals.input) * Self.inputPrice
-            + Double(totals.output) * Self.outputPrice
-            + Double(totals.cacheRead) * Self.cacheReadPrice
-            + Double(totals.cacheWrite) * Self.cacheWritePrice) / 1_000_000
+    func receive(reasoning delta: String? = nil) {
+        if startedGeneratingAt == nil { startedGeneratingAt = Date() }
+        chunks += 1
+        guard let delta else { return }
+        reasoning = String((reasoning + delta).suffix(Self.reasoningTailLength))
+    }
+
+    func finish(outputTokens: Int) {
+        guard let startedGeneratingAt, outputTokens > 0 else { return }
+        let seconds = Date().timeIntervalSince(startedGeneratingAt)
+        if seconds > 0.2 { lastTokensPerSecond = Double(outputTokens) / seconds }
     }
 }

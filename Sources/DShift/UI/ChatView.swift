@@ -10,71 +10,20 @@ enum Theme {
 
 struct SidebarView: View {
     @ObservedObject var store: ChatStore
-    @ObservedObject var apiKeys = APIKeyStore.shared
     let onClose: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             TabStrip(store: store, onClose: onClose)
-            if apiKeys.hasKey {
-                AppContextHeader(tracker: store.tracker)
-                Divider().opacity(0.25)
-                ChatView(model: store.selected)
-                    .id(store.selectedID)
-            } else {
-                APIKeySetupView(apiKeys: apiKeys)
-            }
+            AppContextHeader(tracker: store.tracker)
+            Divider().opacity(0.25)
+            ChatView(model: store.selected)
+                .id(store.selectedID)
         }
         .background { TextZoomShortcuts() }
         // Clicking anywhere that isn't a control puts the cursor in the input. Child buttons and tabs win over this.
         .contentShape(Rectangle())
         .onTapGesture { store.selected.focusRequest += 1 }
-    }
-}
-
-private struct APIKeySetupView: View {
-    let apiKeys: APIKeyStore
-    @State private var key = ""
-    @State private var saveFailed = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Add your Anthropic API key")
-                .scaledFont(15, weight: .semibold)
-            Text(
-                "D-Shift sends your questions and screen context to Claude using your own key. The key is stored in your macOS Keychain."
-            )
-            .scaledFont(12)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            SecureField("sk-ant-...", text: $key)
-                .textFieldStyle(.plain)
-                .scaledFont(13)
-                .padding(10)
-                .background(Theme.surfaceFill, in: Theme.surfaceShape)
-                .overlay(Theme.surfaceShape.strokeBorder(Theme.stroke))
-                .onSubmit(save)
-            if saveFailed {
-                Text("Couldn't save the key to the Keychain. Try again.")
-                    .scaledFont(11)
-                    .foregroundStyle(.red)
-            }
-            HStack {
-                Link("Get a key", destination: URL(string: "https://console.anthropic.com/settings/keys")!)
-                    .scaledFont(12)
-                Spacer()
-                Button("Save", action: save)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(key.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            Spacer()
-        }
-        .padding(16)
-    }
-
-    private func save() {
-        saveFailed = !apiKeys.save(key)
-        if !saveFailed { key = "" }
     }
 }
 
@@ -87,7 +36,7 @@ private struct ChatView: View {
             if !model.queue.isEmpty {
                 QueueView(model: model)
             }
-            UsageBar(usage: model.usage)
+            UsageBar(usage: model.usage, progress: model.progress)
             InputBar(model: model)
         }
     }
@@ -238,7 +187,7 @@ private struct TranscriptView: View {
                         if model.isRunning && !model.isStreamingText && !model.isToolActive,
                             let startedAt = model.turnStartedAt
                         {
-                            ThinkingRow(startedAt: startedAt)
+                            ThinkingRow(startedAt: startedAt, progress: model.progress)
                         }
                         Color.clear
                             .frame(height: 1)
@@ -286,6 +235,7 @@ private struct BottomOffsetKey: PreferenceKey {
 
 private struct UsageBar: View {
     let usage: ChatUsage
+    @ObservedObject var progress: GenerationProgress
 
     var body: some View {
         HStack(spacing: 10) {
@@ -298,18 +248,11 @@ private struct UsageBar: View {
             )
             Text("\(Self.compact(usage.totals.input + usage.totals.cacheRead + usage.totals.cacheWrite)) in")
             Text("\(Self.compact(usage.totals.output)) out")
-            if usage.requests > 0 {
-                Text("\(Self.percent(usage.cacheHitRate)) cached")
-                    .help(
-                        "Cache reads \(usage.totals.cacheRead.formatted()), writes \(usage.totals.cacheWrite.formatted())"
-                    )
+            if let rate = progress.lastTokensPerSecond {
+                Text("\(rate, format: .number.precision(.fractionLength(0))) tok/s")
+                    .help("Generation speed of the last reply, after the prompt was read")
             }
             Spacer(minLength: 0)
-            Text(
-                usage.estimatedCost,
-                format: .currency(code: "USD").precision(.fractionLength(usage.estimatedCost < 1 ? 3 : 2))
-            )
-            .help("Estimated at Opus 5.5 list prices over \(usage.requests) requests")
         }
         .scaledFont(10)
         .monospacedDigit()
@@ -357,24 +300,48 @@ private struct EmptyState: View {
 }
 
 /// Port of Beautiful UI's loading state (beautifului.dev): a 3x3 pixel grid, shimmering label, and elapsed time.
+/// Below it, the model's reasoning streams in live with a running token rate, so the user can watch it work.
 private struct ThinkingRow: View {
     let startedAt: Date
+    @ObservedObject var progress: GenerationProgress
 
     var body: some View {
         TimelineView(.animation) { timeline in
             let now = timeline.date
-            HStack(spacing: 10) {
-                PixelGrid(time: now.timeIntervalSinceReferenceDate)
-                ShimmerText(text: "Thinking", time: now.timeIntervalSinceReferenceDate)
-                Text(String(format: "%.1fs", now.timeIntervalSince(startedAt)))
-                    .scaledFont(12, design: .monospaced)
-                    .monospacedDigit()
-                    .foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    PixelGrid(time: now.timeIntervalSinceReferenceDate)
+                    ShimmerText(
+                        text: progress.startedGeneratingAt == nil ? "Reading prompt" : "Thinking",
+                        time: now.timeIntervalSinceReferenceDate)
+                    Text(String(format: "%.1fs", now.timeIntervalSince(startedAt)))
+                    if let rate = liveRate(at: now) {
+                        Text("\(progress.chunks) tok · \(rate, format: .number.precision(.fractionLength(0))) tok/s")
+                    }
+                }
+                .scaledFont(12, design: .monospaced)
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+                if !progress.reasoning.isEmpty {
+                    Text(progress.reasoning.trimmingCharacters(in: .whitespacesAndNewlines))
+                        .scaledFont(11)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(4)
+                        .truncationMode(.head)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
         }
         .transition(.opacity)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Thinking")
+    }
+
+    /// Ollama streams about one token per chunk, so chunks per second approximates tokens per second.
+    private func liveRate(at now: Date) -> Double? {
+        guard let start = progress.startedGeneratingAt, progress.chunks > 1 else { return nil }
+        let seconds = now.timeIntervalSince(start)
+        return seconds > 0.5 ? Double(progress.chunks) / seconds : nil
     }
 }
 
@@ -576,7 +543,11 @@ private struct InputBar: View {
             .overlay(
                 Theme.surfaceShape.strokeBorder(
                     isDropTargeted ? Color.accentColor : AutoMode.isOn ? Color.orange.opacity(0.5) : Theme.stroke))
-            AutoModeHint(model: model)
+            HStack {
+                AutoModeHint(model: model)
+                Spacer(minLength: 8)
+                ModelLabel()
+            }
         }
         .animation(.fadeUp, value: commandMatches)
         .onChange(of: model.input) { highlighted = 0 }
@@ -780,6 +751,33 @@ private struct AutoModeHint: View {
             isOn
                 ? "Computer use runs without asking. Click or /auto to turn off."
                 : "Click or /auto to always allow computer use.")
+    }
+}
+
+/// OpenCode-style model and provider label, opposite the mode line.
+private struct ModelLabel: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "cpu")
+                .scaledFont(11, weight: .semibold)
+                .foregroundStyle(Color.accentColor)
+            Text(InklingClient.displayName)
+                .scaledFont(12, weight: .semibold)
+                .foregroundStyle(.primary)
+            Circle()
+                .fill(Color.green)
+                .frame(width: 5, height: 5)
+            Text("Ollama")
+                .scaledFont(11)
+                .foregroundStyle(.secondary)
+        }
+        .lineLimit(1)
+        .fixedSize()
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(Color.accentColor.opacity(0.18), in: Capsule())
+        .overlay(Capsule().strokeBorder(Color.accentColor.opacity(0.45)))
+        .help("Running locally: Ollama model \(InklingClient.model) at \(InklingClient.host)")
     }
 }
 

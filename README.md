@@ -1,6 +1,6 @@
 # D-Shift
 
-A screen-aware AI sidebar for macOS. Double-tap **Shift** anywhere, ask a question, and Claude answers using what's on your screen and a local memory of who you are.
+A screen-aware AI sidebar for macOS. Double-tap **Shift** anywhere, ask a question, and Inkling 2 Mini (running locally through Ollama) answers using what's on your screen and a local memory of who you are.
 
 - **Sees your screen without screenshots by default.** It reads the macOS accessibility tree of the window you're looking at, which is exact and cheap. Only when that isn't enough (images, charts, design apps) does the model take a screenshot, at most one per question.
 - **Remembers you, locally.** Memory is a plain folder of markdown files on your Mac. The model searches it with `grep`/`rg` and saves what it learns about you in the background, without cluttering the chat.
@@ -18,7 +18,16 @@ A screen-aware AI sidebar for macOS. Double-tap **Shift** anywhere, ask a questi
    xattr -dr com.apple.quarantine /Applications/D-Shift.app
    ```
 3. Grant **Accessibility** when asked (System Settings > Privacy & Security > Accessibility), then quit and reopen D-Shift from the menu bar icon.
-4. Double-tap **Shift**, paste your [Anthropic API key](https://console.anthropic.com/settings/keys), and click Save. The key is stored in your Keychain.
+4. Install [Ollama](https://ollama.com), pull the model, and create the 128K-context variant D-Shift uses (it shares the same weights, so no extra disk):
+   ```bash
+   brew install ollama && brew services start ollama
+   ollama pull inkling-2-mini
+   printf 'FROM inkling-2-mini\nPARAMETER num_ctx 131072\n' > /tmp/Modelfile
+   ollama create inkling-2-mini-128k -f /tmp/Modelfile
+   ```
+   Needs a Mac with 32 GB or more of memory and about 20 GB of disk.
+5. Optional: for web search and page reading, set `BROWSERBASE_API_KEY` in `~/.config/dshift/.env`.
+6. Double-tap **Shift** and ask.
 
 Requires macOS 14 (Sonoma) or later, on Apple silicon or Intel.
 
@@ -26,12 +35,12 @@ Requires macOS 14 (Sonoma) or later, on Apple silicon or Intel.
 
 ## Run from source
 
-Requires Swift 5.9+ (Xcode or the Command Line Tools: `xcode-select --install`) and an [Anthropic API key](https://console.anthropic.com).
+Requires Swift 5.9+ (Xcode or the Command Line Tools: `xcode-select --install`) and Ollama with `inkling-2-mini` pulled (see above).
 
 ```bash
 git clone https://github.com/Kylejeong2/d-shift.git
 cd d-shift
-cp .env.example .env        # then set ANTHROPIC_API_KEY
+cp .env.example .env        # optional: set BROWSERBASE_API_KEY
 swift run
 ```
 
@@ -56,7 +65,7 @@ The downloaded app asks for these as D-Shift. When you launch with `swift run`, 
 | New chat tab | Cmd+T or the + button |
 | Close chat tab | Cmd+W or the x on the tab. Closing the last tab hides the sidebar. |
 | Resize | Drag the left edge for width, the top or bottom edge for height, or a left corner for both. Size and vertical position are remembered. |
-| Send while Claude is replying | Return queues the message; it runs when the current reply finishes |
+| Send while the model is replying | Return queues the message; it runs when the current reply finishes |
 | Interrupt and send now | Cmd+Return, or the arrow on a queued message |
 | Text size | Cmd+= / Cmd+- to zoom, Cmd+0 to reset (remembered) |
 | Reset a chat | Type `/clear` |
@@ -73,7 +82,7 @@ The row above the input shows, for the current chat: how full the context window
    Accessibility tree of the focused window  +  me.md + memory file list
                         │
                         v
-          Claude (Messages API, streaming, tool use loop)
+   Inkling 2 Mini via Ollama (streaming, tool use loop)
                         │
           ┌─────────────┼────────────────┬───────────────┐
           v             v                v               v
@@ -84,7 +93,7 @@ The row above the input shows, for the current chat: how full the context window
 
 1. On send, D-Shift tells the model only which app and window you're looking at. When the question needs the screen, the model calls `read_screen`, which serializes the focused window's accessibility tree into compact indented text. Screenshots work the same way, on demand.
 2. Each request also carries `me.md` and the list of memory files, so the model knows what it can look up.
-3. Claude streams back text and tool calls. Tools run locally; results go back to Claude until it finishes. Screen refreshes and memory reads and writes run in the background without a card in the chat. Screenshots show as a card with a thumbnail.
+3. The model streams back text and tool calls. Tools run locally; results go back to the model until it finishes. Screen refreshes and memory reads and writes run in the background without a card in the chat. Screenshots show as a card with a thumbnail.
 4. Streaming text is revealed on a 60 fps clock that drains a fraction of the backlog each frame, so output is smooth rather than bursty.
 
 More detail in [docs/architecture.md](docs/architecture.md).
@@ -112,20 +121,22 @@ See [docs/memory.md](docs/memory.md).
 
 ## Configuration
 
-Settings are read from the environment first, then `./.env`, then `~/.config/dshift/.env`, then the Keychain (where the in-app setup screen saves the API key).
+Settings are read from the environment first, then `./.env`, then `~/.config/dshift/.env`, then the Keychain.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | none (required) | API key. The app asks for it on first use if it isn't set elsewhere. Change it from the menu bar icon > Change API Key. |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server that serves the model |
+| `INKLING_MODEL` | `inkling-2-mini-128k` | Ollama model tag to chat with |
+| `BROWSERBASE_API_KEY` | none | Enables `web_search` and `web_fetch` through the Browserbase Search and Fetch APIs |
 | `DSHIFT_DATA_DIR` | `~/Library/Application Support/DShift` | Memory and chat history location |
 | `DSHIFT_CODEX_PATH` | auto-detected | Path to the `codex` CLI, for computer use ([docs/tools.md](docs/tools.md)) |
 
-Model settings live in `Sources/DShift/Chat/ClaudeClient.swift`: the model (`claude-opus-5-5`) and effort (`low`, for fast sidebar answers).
+The chat client lives in `Sources/DShift/Chat/InklingClient.swift` and talks to Ollama's Anthropic-compatible `/v1/messages` endpoint.
 
 ## Privacy
 
 - Memory and history stay on your Mac.
-- Screen context (the app and window name on every message, the accessibility snapshot when the model calls `read_screen`, and screenshots when it takes one) and the memory overview are sent to the Anthropic API with your questions. Don't use D-Shift on screens you aren't comfortable sending.
+- Screen context (the app and window name on every message, the accessibility snapshot when the model calls `read_screen`, and screenshots when it takes one) and the memory overview go to the model running locally in Ollama and don't leave your Mac. Web search queries and fetched URLs go to Browserbase.
 - The sidebar excludes itself from screenshots and screen recordings.
 - Computer-use tasks are sent to Codex (OpenAI) along with whatever Codex sees in the apps it operates. Each task needs your approval.
 - Memory search strips `ANTHROPIC_API_KEY` from the environment of the commands it runs.
@@ -155,7 +166,7 @@ Project layout:
 ```
 Sources/DShift/
 ├── App/       app lifecycle, panel window, double-Shift monitor, resize, config
-├── Chat/      chat model and agent loop, tabs, Claude streaming client, usage
+├── Chat/      chat model and agent loop, tabs, Inkling streaming client, usage
 ├── Context/   accessibility snapshots, active-app tracking
 ├── Memory/    memory folder, chat history log
 ├── Tools/     tool protocol and registry, screen tools, memory tools, shell policy

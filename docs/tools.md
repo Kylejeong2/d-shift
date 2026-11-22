@@ -1,6 +1,6 @@
 # Tools
 
-Tools are local functions Claude can call during a chat. Visible tools show up in the transcript as a card with their status, input, and output; hidden tools run in the background.
+Tools are local functions the model can call during a chat. Visible tools show up in the transcript as a card with their status, input, and output; hidden tools run in the background.
 
 ## Built-in tools
 
@@ -16,15 +16,15 @@ Tools are local functions Claude can call during a chat. Visible tools show up i
 
 `use_computer` is available when the [Codex CLI](https://developers.openai.com/codex) is installed with Computer Use enabled and signed in. D-Shift looks for it at `DSHIFT_CODEX_PATH`, then the CLI bundled in ChatGPT.app, then common install locations. If none is found, the tool isn't offered.
 
-Claude writes one complete, self-contained task, because Codex can't see the conversation. After you click Allow, D-Shift runs:
+The model writes one complete, self-contained task, because Codex can't see the conversation. After you click Allow, D-Shift runs:
 
 ```
 codex exec --json --ephemeral --skip-git-repo-check --sandbox read-only -C <data dir>/codex "<task>"
 ```
 
-Codex's own model chooses the actions and drives your apps through its computer-use service, which works in the background without taking over the app you're using. The read-only sandbox stops Codex from running shell commands that change files. D-Shift parses the JSON event stream to show progress on the card, and returns Codex's final message to Claude. Stop terminates the process. Codex's stderr from the last run is kept at `<data dir>/codex/last-run-stderr.log` for debugging.
+Codex's own model chooses the actions and drives your apps through its computer-use service, which works in the background without taking over the app you're using. The read-only sandbox stops Codex from running shell commands that change files. D-Shift parses the JSON event stream to show progress on the card, and returns Codex's final message to the model. Stop terminates the process. Codex's stderr from the last run is kept at `<data dir>/codex/last-run-stderr.log` for debugging.
 
-Usage counts against your Codex or ChatGPT plan, not your Anthropic key.
+Usage counts against your Codex or ChatGPT plan, not anything D-Shift runs.
 
 ## Adding a tool
 
@@ -62,7 +62,7 @@ tools = ToolRegistry(tools: [ReadScreenTool(tracker: tracker), /* ... */, WordCo
 - **Visibility:** set `isHidden = true` for background work the user doesn't need to see (as the memory tools and `read_screen` do). A hidden tool has no card, so it can't ask for approval: refuse unsafe input instead.
 - **Rate limits:** set `maxCallsPerTurn` to cap calls per question (as `take_screenshot` does). Extra calls return an error telling the model to answer with what it has.
 - **Validation:** tool input streams eagerly (`eager_input_streaming`), so the server doesn't validate it. `ToolRegistry.validate` checks required fields and non-empty strings. Validate anything stricter in `run`.
-- **Errors:** throw from `run`. The error message is returned to Claude as an `is_error` result and shown on the card.
+- **Errors:** throw from `run`. The error message is returned to the model as an `is_error` result and shown on the card.
 - **Images:** set `ToolOutput.jpeg` to return an image block alongside the text.
 - **Blocking work:** `Tool` is `@MainActor`. Move slow or blocking work off the main actor with `Task.detached`, as `read_screen` and `search_memory` do.
 - **Writing descriptions:** describe when to use the tool, not only what it does. That is what the model uses to decide.

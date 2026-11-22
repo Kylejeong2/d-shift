@@ -74,7 +74,6 @@ struct ToolRegistry {
                 "name": $0.name,
                 "description": $0.description,
                 "input_schema": $0.inputSchema,
-                "eager_input_streaming": true,
             ]
         }
     }
@@ -84,7 +83,7 @@ struct ToolRegistry {
         return tool
     }
 
-    /// Eager input streaming skips server-side validation, so check required fields before running.
+    /// Local models can emit tool calls that miss required fields, so check them before running.
     func validate(_ input: JSON, for tool: Tool) throws {
         let required = tool.inputSchema["required"] as? [String] ?? []
         let properties = tool.inputSchema["properties"] as? [String: JSON] ?? [:]
