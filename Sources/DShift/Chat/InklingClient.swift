@@ -53,6 +53,9 @@ enum InklingClient {
     private static func makeRequest(system: String, messages: [JSON], tools: [JSON]) throws -> URLRequest {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
+        // Ollama sends nothing until it has read the whole prompt, which takes over a minute for long prompts on a
+        // laptop. The default 60 s idle timeout would cancel requests that are still making progress.
+        request.timeoutInterval = 600
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         var body: JSON = [
             "model": model,

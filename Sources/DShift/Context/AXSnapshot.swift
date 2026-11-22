@@ -12,7 +12,8 @@ struct ScreenContext: Equatable {
 /// Serializes the focused window's accessibility tree into compact indented text for the model.
 enum AXSnapshot {
     private static let maxNodesVisited = 3000
-    private static let maxOutputChars = 60_000
+    /// About 4K tokens. A local model reads prompts at a few hundred tokens per second, so larger trees stall replies.
+    private static let maxOutputChars = 16_000
     private static let maxValueChars = 500
     private static let maxDepth = 40
     /// Busy Electron apps can answer each attribute read slowly, so the whole walk gets a time budget.
