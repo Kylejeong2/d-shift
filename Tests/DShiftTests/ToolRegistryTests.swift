@@ -19,10 +19,10 @@ private struct EchoTool: Tool {
 struct ToolRegistryTests {
     let registry = ToolRegistry(tools: [EchoTool()])
 
-    @Test func definitionsExposeSchemaWithEagerStreaming() {
+    @Test func definitionsExposeOnlyStandardFields() {
         let definition = registry.definitions[0]
         #expect(definition["name"] as? String == "echo")
-        #expect(definition["eager_input_streaming"] as? Bool == true)
+        #expect(definition["eager_input_streaming"] == nil)
         #expect(definition["input_schema"] != nil)
     }
 

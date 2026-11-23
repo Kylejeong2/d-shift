@@ -3,7 +3,7 @@ import Testing
 @testable import DShift
 
 struct StreamParsingTests {
-    @Test func claudeParsesContentBlockEvents() throws {
+    @Test func inklingParsesContentBlockEvents() throws {
         let start = try InklingClient.parseEvents(
             #"data: {"type":"content_block_start","index":2,"content_block":{"type":"text"}}"#)
         guard case .blockStart(let index, let block) = start.first else {
@@ -28,7 +28,7 @@ struct StreamParsingTests {
         }
     }
 
-    @Test func claudeReadsUsageAndStopReason() throws {
+    @Test func inklingReadsUsageAndStopReason() throws {
         let start = try InklingClient.parseEvents(
             #"data: {"type":"message_start","message":{"usage":{"input_tokens":5}}}"#)
         guard case .usage(let usage) = start.first else {
@@ -46,7 +46,7 @@ struct StreamParsingTests {
         }
     }
 
-    @Test func claudeIgnoresNonDataLinesAndThrowsOnErrors() throws {
+    @Test func inklingIgnoresNonDataLinesAndThrowsOnErrors() throws {
         #expect(try InklingClient.parseEvents("event: ping").isEmpty)
         #expect(try InklingClient.parseEvents(#"data: {"type":"ping"}"#).isEmpty)
         #expect(throws: InklingError.self) {
