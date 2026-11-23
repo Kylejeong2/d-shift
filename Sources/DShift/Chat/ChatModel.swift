@@ -73,6 +73,7 @@ final class ChatModel: ObservableObject {
 
     let tracker: AppTracker
     let scroll = ScrollSignal()
+    let progress = GenerationProgress()
 
     private let tools: ToolRegistry
     private var apiMessages: [JSON] = []
@@ -93,7 +94,7 @@ final class ChatModel: ObservableObject {
         }
         var available: [Tool] = [
             ReadScreenTool(tracker: tracker), ScreenshotTool(tracker: tracker), MemorySearchTool(), MemoryWriteTool(),
-            DiagramTool(), ScratchpadTool(),
+            DiagramTool(), ScratchpadTool(), WebSearchTool(), WebFetchTool(),
         ]
         if let codexPath = ComputerUseTool.locateCodex() {
             available.append(ComputerUseTool(codexPath: codexPath))
@@ -259,7 +260,7 @@ final class ChatModel: ObservableObject {
                 case "pause_turn":
                     continue
                 case "refusal":
-                    return appendNote("Claude declined to answer this request.")
+                    return appendNote("Inkling declined to answer this request.")
                 case "max_tokens":
                     return appendNote("Response hit the length limit.")
                 default:
@@ -313,9 +314,10 @@ final class ChatModel: ObservableObject {
         defer { textEntries.values.forEach { $0.flush() } }
 
         Self.repairDanglingToolUses(&apiMessages)
-        var serverCalls: [String: ToolCallEntry] = [:]
-        for try await event in ClaudeClient.stream(
-            system: Self.systemPrompt, messages: apiMessages, tools: tools.definitions + Self.serverTools)
+        progress.reset()
+        defer { progress.finish(outputTokens: message.usage.output) }
+        for try await event in InklingClient.stream(
+            system: Self.systemPrompt, messages: apiMessages, tools: tools.definitions)
         {
             message.apply(event)
             switch event {
@@ -335,30 +337,24 @@ final class ChatModel: ObservableObject {
                     if (try? tools.tool(named: entry.name))?.isHidden != true {
                         entries.append(.tool(entry))
                     }
-                // Dynamic filtering also emits internal code_execution calls; only search and fetch get a row.
-                case "server_tool_use" where ["web_search", "web_fetch"].contains(block["name"] as? String ?? ""):
-                    // Web search and fetch run on Anthropic's side; the row only mirrors their progress.
-                    let entry = ToolCallEntry(
-                        toolUseID: block["id"] as? String ?? "", name: block["name"] as? String ?? "web")
-                    toolEntries[index] = entry
-                    serverCalls[entry.toolUseID] = entry
-                    entries.append(.tool(entry))
-                case "web_search_tool_result", "web_fetch_tool_result":
-                    if let entry = serverCalls[block["tool_use_id"] as? String ?? ""] {
-                        Self.finishServerCall(entry, result: block)
-                        scroll.tick += 1
-                    }
                 default:
                     break
                 }
             case .blockDelta(let index, let delta):
-                if delta["type"] as? String == "text_delta", let text = delta["text"] as? String {
-                    textEntries[index]?.enqueue(text)
+                switch delta["type"] as? String {
+                case "text_delta":
+                    if let text = delta["text"] as? String { textEntries[index]?.enqueue(text) }
+                    progress.receive()
+                case "thinking_delta":
+                    progress.receive(reasoning: delta["thinking"] as? String)
+                case "input_json_delta":
+                    progress.receive()
+                default:
+                    break
                 }
             case .blockStop(let index):
                 if let entry = toolEntries[index] {
                     entry.input = message.blocks[index]["input"] as? JSON ?? [:]
-                    if serverCalls[entry.toolUseID] != nil, !entry.isFinished { entry.status = .running }
                 }
             case .stopReason, .usage:
                 break
@@ -372,7 +368,7 @@ final class ChatModel: ObservableObject {
         // A cancelled stream can end without throwing. Treat it as cancelled, never as a finished reply: a
         // half-streamed tool_use saved as a normal turn breaks every later request with a 400.
         try Task.checkCancellation()
-        guard !message.blocks.isEmpty else { throw ClaudeError.stream("Empty response") }
+        guard !message.blocks.isEmpty else { throw InklingError.stream("Empty response") }
         message.dropEmptyTextBlocks()
         return message
     }
@@ -414,7 +410,7 @@ final class ChatModel: ObservableObject {
                 return (ToolOutput(text: "The user declined this action."), true)
             }
             entry.status = .running
-            // Its own task so the row's Stop button can cancel just this tool and let Claude carry on.
+            // Its own task so the row's Stop button can cancel just this tool and let the model carry on.
             let work = Task {
                 try await tool.run(
                     input,
@@ -460,35 +456,6 @@ final class ChatModel: ObservableObject {
             scroll.tick += 1
             return (ToolOutput(text: error.localizedDescription), true)
         }
-    }
-
-    /// Anthropic-hosted tools: Claude searches and reads the web without any client code running.
-    /// Web fetch can only open URLs that already appear in the conversation (from search results or the user).
-    static let serverTools: [JSON] = [
-        ["type": "web_search_20260209", "name": "web_search", "max_uses": 5],
-        ["type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 5, "max_content_tokens": 20000],
-    ]
-
-    /// Errors come back as a 200 with an error object as `content`; successful search content is a list.
-    private static func finishServerCall(_ entry: ToolCallEntry, result: JSON) {
-        if let error = result["content"] as? JSON, let code = error["error_code"] as? String {
-            entry.output = "Error: \(code)"
-            entry.status = .failed
-            Log.info("web", "\(entry.name) failed: \(code)")
-            return
-        }
-        if let results = result["content"] as? [JSON] {
-            entry.output = results.compactMap { item in
-                guard let url = item["url"] as? String else { return nil }
-                return "\(item["title"] as? String ?? url)\n  \(url)"
-            }.joined(separator: "\n")
-        } else if let fetched = result["content"] as? JSON {
-            let document = fetched["content"] as? JSON
-            entry.output = [(document?["title"] as? String), fetched["url"] as? String].compactMap { $0 }.joined(
-                separator: "\n")
-        }
-        entry.status = .succeeded
-        Log.info("web", "\(entry.name) ok: \(entry.inputSummary)")
     }
 
     /// Every tool_use must be answered by a tool_result in the next message. Fills in any that are missing
@@ -540,7 +507,7 @@ final class ChatModel: ObservableObject {
         entries.append(.text(TextEntry(role: .assistant, text: "_\(text)_")))
     }
 
-    /// Runs a bare `/command`. Returns false for ordinary messages, which are sent to Claude.
+    /// Runs a bare `/command`. Returns false for ordinary messages, which are sent to the model.
     private func handleCommand(_ message: QueuedMessage) -> Bool {
         guard message.attachments.isEmpty, message.text.hasPrefix("/") else { return false }
         guard let command = SlashCommand.exact(message.text) else {

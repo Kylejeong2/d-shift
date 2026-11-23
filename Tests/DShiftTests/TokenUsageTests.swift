@@ -15,13 +15,11 @@ struct TokenUsageTests {
         #expect(usage.output == 250)
     }
 
-    @Test func chatUsageTracksContextAndCost() {
+    @Test func chatUsageTracksContext() {
         var chat = ChatUsage()
         chat.record(TokenUsage(input: 1_000, output: 500, cacheRead: 9_000, cacheWrite: 0))
         #expect(chat.contextTokens == 10_500)
         #expect(chat.requests == 1)
-        #expect(chat.cacheHitRate == 0.9)
-        #expect(abs(chat.estimatedCost - 0.0158) < 0.0001)
     }
 }
 

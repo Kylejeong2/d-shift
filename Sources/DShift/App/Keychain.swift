@@ -41,25 +41,3 @@ enum Keychain {
         SecItemDelete(query as CFDictionary)
     }
 }
-
-/// Whether an API key is configured, so the sidebar can show setup instead of a chat that would fail.
-@MainActor
-final class APIKeyStore: ObservableObject {
-    static let shared = APIKeyStore()
-    private static let account = "ANTHROPIC_API_KEY"
-
-    @Published private(set) var hasKey = Config.value(account) != nil
-
-    func save(_ key: String) -> Bool {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, Keychain.save(trimmed, for: Self.account) else { return false }
-        hasKey = true
-        return true
-    }
-
-    /// Forgets the keychain key. A key from the environment or a .env file still applies.
-    func reset() {
-        Keychain.delete(Self.account)
-        hasKey = Config.value(Self.account) != nil
-    }
-}
